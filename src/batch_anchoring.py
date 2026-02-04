@@ -45,9 +45,33 @@ def _save_anchors(payload: Dict[str, Any]) -> None:
 
 
 def build_batch_root(receipt_hashes: List[str]) -> str:
-    if not receipt_hashes:
-        raise ValueError("No receipt hashes to build batch root")
-    leaves = [h.encode("utf-8") for h in receipt_hashes]
+    """
+    Build a batch Merkle root from a list of receipt hashes.
+    We:
+      - normalize hex (strip '0x'),
+      - sort deterministically,
+      - convert to bytes,
+      - compute merkle_root.
+    This must be used BOTH when anchoring and when verifying,
+    so that batch roots are identical.
+    """
+    # normalize
+    normalized = []
+    for h in receipt_hashes:
+        if h.startswith("0x"):
+            h = h[2:]
+        normalized.append(h.lower())
+
+    # deterministic order
+    normalized.sort()
+
+    # convert to bytes
+    leaves = [bytes.fromhex(h) for h in normalized]
+
+    # empty list should probably never happen, but just in case
+    if not leaves:
+        raise ValueError("Cannot build batch root from empty list of hashes")
+
     root = merkle_root(leaves)
     return "0x" + root.hex()
 

@@ -104,27 +104,31 @@ def send_session(session: Dict[str, Any]) -> None:
     else:
         data = resp.json()
         print(f"[OK] {session['session_id']} -> hash={data['hash']}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate synthetic charging sessions.")
-    parser.add_argument("num_sessions", type=int, help="Number of sessions to generate")
-    parser.add_argument(
-        "--registry",
-        type=Path,
-        help="Path to exports/evse_registry.csv to pick real EVSE IDs",
-    )
-    args = parser.parse_args()
-
-    registry = _load_registry(args.registry) if args.registry else []
+        
+def run_synthetic_sessions(num_sessions:int) -> dict:
     t0 = time.perf_counter()
-
-    for i in range(1, args.num_sessions + 1):
-        sess = generate_session(i, registry=registry)
+    for i in range(1, num_sessions + 1):
+        sess = generate_session(i)
         send_session(sess)
-
     t1 = time.perf_counter()
     elapsed = t1 - t0
+    return {
+        "num_sessions": num_sessions,
+        "t_finalize_total": elapsed,
+        "t_finalize_avg": elapsed / num_sessions if num_sessions > 0 else 0
+    }
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) != 2:
+        print("Usage: python -m src.synthetic_sessions <num_sessions>")
+        sys.exit(1)
+
+    n = int(sys.argv[1])
+    stats = run_synthetic_sessions(n)
     print(
-        f"\nGenerated and finalized {args.num_sessions} sessions in {elapsed:.3f} s "
-        f"(avg {elapsed / args.num_sessions:.6f} s per session)"
+        f"\nGenerated and finalized {stats['num_sessions']} sessions "
+        f"in {stats['t_finalize_total']:.3f} s "
+        f"(avg {stats['t_finalize_avg']:.6f} s per session)"
     )
