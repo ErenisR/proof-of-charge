@@ -59,3 +59,16 @@ captions. Generate with:
    `python -m src.export`
 4) Generate figures:
    `python -m src.charts`
+
+## Reproducible Experiment Runner
+
+Use one command to run a full synthetic experiment (generate -> finalize ->
+anchor -> verify -> export -> figures snapshot) with a fixed seed:
+
+`python -m src.run_experiment 500 --day 2026-02-17 --seed 42`
+
+This creates a versioned folder in `results/<run_id>/` with:
+- `manifest.json` (config + generated session IDs + metrics),
+- `metrics.json` (key experiment metrics),
+- `datasets/*.csv` (run-scoped sessions, meter values, receipts, anchors, verifications),
+- `figures/*` (copied chart outputs, if chart dependencies are installed).
