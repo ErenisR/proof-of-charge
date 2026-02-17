@@ -1,0 +1,32 @@
+{
+  "config": {
+    "day": "2026-02-17",
+    "num_sessions": 2,
+    "registry_path": null,
+    "seed": 123
+  },
+  "created_at_utc": "2026-02-17T22:25:47.505190Z",
+  "metrics": {
+    "batch_root": "0xff76501a680f8e0a3bcdf35ac563f2968b0502afff08285fca54402aa3e42827",
+    "batch_root_match": true,
+    "datasets": {
+      "meter_values": 22,
+      "receipts": 2,
+      "sessions": 2,
+      "verifications": 2
+    },
+    "day": "2026-02-17",
+    "num_sessions_anchored": 2,
+    "num_sessions_requested": 2,
+    "receipt_count_verified": 2,
+    "run_id": "run_20260217_222547",
+    "seed": 123,
+    "t_finalize_avg_sec": 0.003939,
+    "t_finalize_total_sec": 0.007879
+  },
+  "run_id": "run_20260217_222547",
+  "session_ids": [
+    "run_20260217_222547-0001",
+    "run_20260217_222547-0002"
+  ]
+}

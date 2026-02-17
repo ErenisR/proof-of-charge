@@ -1,0 +1,35 @@
+{
+  "config": {
+    "day": "2026-02-17",
+    "num_sessions": 5,
+    "registry_path": null,
+    "seed": 7
+  },
+  "created_at_utc": "2026-02-17T21:51:40.534416Z",
+  "metrics": {
+    "batch_root": "0x37a014154b415f1bf0b467028479076a43656112776d6ce257a41812c8848e03",
+    "batch_root_match": true,
+    "datasets": {
+      "meter_values": 41,
+      "receipts": 5,
+      "sessions": 5,
+      "verifications": 5
+    },
+    "day": "2026-02-17",
+    "num_sessions_anchored": 5,
+    "num_sessions_requested": 5,
+    "receipt_count_verified": 5,
+    "run_id": "run_20260217_215140",
+    "seed": 7,
+    "t_finalize_avg_sec": 0.001562,
+    "t_finalize_total_sec": 0.007808
+  },
+  "run_id": "run_20260217_215140",
+  "session_ids": [
+    "run_20260217_215140-0001",
+    "run_20260217_215140-0002",
+    "run_20260217_215140-0003",
+    "run_20260217_215140-0004",
+    "run_20260217_215140-0005"
+  ]
+}
