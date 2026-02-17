@@ -72,3 +72,13 @@ This creates a versioned folder in `results/<run_id>/` with:
 - `metrics.json` (key experiment metrics),
 - `datasets/*.csv` (run-scoped sessions, meter values, receipts, anchors, verifications),
 - `figures/*` (copied chart outputs, if chart dependencies are installed).
+
+## Release Notes Generator
+
+Generate markdown release notes from git history:
+
+`python -m src.release_notes --max-count 200`
+
+Optional range by refs/tags:
+
+`python -m src.release_notes --from-ref v0.1.0 --to-ref HEAD`
