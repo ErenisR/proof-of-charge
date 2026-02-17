@@ -1,0 +1,18 @@
+{
+  "batch_root": "0xf3798b18d2848c820b29301d0312a8aa9971716af23362904c728e860eff2fe0",
+  "batch_root_match": true,
+  "datasets": {
+    "meter_values": 2069,
+    "receipts": 200,
+    "sessions": 200,
+    "verifications": 200
+  },
+  "day": "2026-02-17",
+  "num_sessions_anchored": 199,
+  "num_sessions_requested": 200,
+  "receipt_count_verified": 199,
+  "run_id": "run_20260217_224037",
+  "seed": 42,
+  "t_finalize_avg_sec": 0.003985,
+  "t_finalize_total_sec": 0.797041
+}
