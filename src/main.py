@@ -23,6 +23,7 @@ class Pricing(BaseModel):
 
 class SessionInput(BaseModel):
     session_id: str
+    user_id: str
     evse_id: str
     ocpp_tx_id: str
     start_ts: str

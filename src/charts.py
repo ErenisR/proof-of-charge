@@ -277,7 +277,7 @@ def _connector_mix(counts: Dict[str, int], plt) -> None:
     plt.close()
 
 
-def generate_charts() -> None:
+def generate_charts(session_prefix: str | None = None) -> None:
     plt = _safe_import_matplotlib()
     if plt is None:
         return
@@ -291,6 +291,8 @@ def generate_charts() -> None:
     price_series: List[List[Dict[str, Any]]] = []
 
     for session_id, entry in index.items():
+        if session_prefix and not session_id.startswith(f"{session_prefix}-"):
+            continue
         path = Path(entry["file"])
         if not path.exists():
             continue

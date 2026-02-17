@@ -19,10 +19,9 @@ def _normalize_meter_values(mvs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def build_receipt(session: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Build a minimal receipt JSON from a session object.
-    Expected fields:
-      session_id, evse_id, ocpp_tx_id, start_ts, end_ts,
-      meter_values: [{ts, energy_kwh}], pricing: {...}
+    Build a minimal receipt from session dict. 
+    session_id, user_id, evse_id, ocpp_tx_id, start_ts, end_ts,
+    meter_values: [{ts, energy_kwh}], pricing: {...}
     """
     mvs = _normalize_meter_values(session["meter_values"])
     if len(mvs) < 2:
@@ -41,6 +40,7 @@ def build_receipt(session: Dict[str, Any]) -> Dict[str, Any]:
     receipt = {
         "version": "1.0",
         "session_id": session["session_id"],
+        "user_id": session["user_id"],
         "evse_id": session["evse_id"],
         "ocpp_tx_id": session["ocpp_tx_id"],
         "start_ts": session["start_ts"],

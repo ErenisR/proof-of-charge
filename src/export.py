@@ -50,6 +50,7 @@ def export_all() -> None:
         receipts_rows.append(
             {
                 "session_id": session_id,
+                "user_id": receipt.get("user_id"),
                 "receipt_hash": receipt_hash,
                 "merkle_root": receipt.get("merkle_root"),
                 "pricing_model": (receipt.get("pricing") or {}).get("model"),
@@ -65,6 +66,7 @@ def export_all() -> None:
             sessions_rows.append(
                 {
                     "session_id": session_id,
+                    "user_id": session.get("user_id"),
                     "evse_id": session.get("evse_id"),
                     "start_ts": session.get("start_ts"),
                     "end_ts": session.get("end_ts"),
@@ -113,6 +115,7 @@ def export_all() -> None:
         receipts_rows,
         [
             "session_id",
+            "user_id",
             "receipt_hash",
             "merkle_root",
             "pricing_model",
@@ -126,7 +129,7 @@ def export_all() -> None:
     _write_csv(
         EXPORT_DIR / "sessions.csv",
         sessions_rows,
-        ["session_id", "evse_id", "start_ts", "end_ts", "energy_kwh", "tariff_model"],
+        ["session_id", "user_id", "evse_id", "start_ts", "end_ts", "energy_kwh", "tariff_model"],
     )
     _write_csv(
         EXPORT_DIR / "meter_values.csv",

@@ -1,5 +1,7 @@
 # src/verifier_batch.py
+import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
@@ -17,19 +19,28 @@ def _load_anchors() -> Dict[str, Any]:
     return json.loads(ANCHORS_FILE.read_text())
 
 
-def _find_anchor(day: str) -> Dict[str, Any] | None:
+def _find_anchor(day: str, session_prefix: str | None = None) -> Dict[str, Any] | None:
     anchors = _load_anchors().get("batches", [])
-    for batch in anchors:
-        if batch.get("day") == day:
-            return batch
+    # Newest match first to avoid stale anchors when same day is anchored multiple times.
+    for batch in reversed(anchors):
+        if batch.get("day") != day:
+            continue
+        if session_prefix and batch.get("session_prefix") != session_prefix:
+            continue
+        return batch
     return None
 
 
-def _collect_hashes_for_day(day: str) -> Tuple[List[str], List[str]]:
+def _collect_hashes_for_day(
+    day: str,
+    session_prefix: str | None = None,
+) -> Tuple[List[str], List[str]]:
     index = load_index()
     receipt_hashes: List[str] = []
     session_ids: List[str] = []
     for session_id, entry in index.items():
+        if session_prefix and not session_id.startswith(f"{session_prefix}-"):
+            continue
         path = Path(entry["file"])
         if not path.exists():
             continue
@@ -43,18 +54,21 @@ def _collect_hashes_for_day(day: str) -> Tuple[List[str], List[str]]:
             continue
         receipt_hashes.append(receipt_hash)
         session_ids.append(session_id)
+    session_ids.sort()
     return receipt_hashes, session_ids
 
 
-def verify_day(day: str) -> Dict[str, Any]:
-    anchor = _find_anchor(day)
+def verify_day(day: str, session_prefix: str | None = None) -> Dict[str, Any]:
+    anchor = _find_anchor(day, session_prefix=session_prefix)
     if not anchor:
-        raise ValueError(f"No anchor found for day {day}")
-    receipt_hashes, session_ids = _collect_hashes_for_day(day)
+        suffix = f" with prefix {session_prefix}" if session_prefix else ""
+        raise ValueError(f"No anchor found for day {day}{suffix}")
+    receipt_hashes, session_ids = _collect_hashes_for_day(day, session_prefix=session_prefix)
     computed_root = build_batch_root(receipt_hashes)
     expected_root = anchor.get("batch_root")
     return {
         "day": day,
+        "session_prefix": session_prefix,
         "expected_root": expected_root,
         "computed_root": computed_root,
         "match": computed_root == expected_root,
@@ -64,16 +78,23 @@ def verify_day(day: str) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    import sys
+    parser = argparse.ArgumentParser(description="Verify anchored batch roots.")
+    parser.add_argument("day", help="Day in YYYY-MM-DD format")
+    parser.add_argument(
+        "--prefix",
+        help="Only verify sessions with IDs starting with '<prefix>-'",
+    )
+    args = parser.parse_args()
 
-    if len(sys.argv) != 2:
-        print("Usage: python -m src.verifier_batch YYYY-MM-DD")
-        sys.exit(1)
-
-    day = sys.argv[1]
-    result = verify_day(day)
+    result = verify_day(args.day, session_prefix=args.prefix)
     if result["match"]:
-        print(f"[OK] day={day} batch_root matches ({result['receipt_count']} receipts)")
+        print(
+            f"[OK] day={args.day} batch_root matches "
+            f"({result['receipt_count']} receipts)"
+        )
     else:
-        print(f"[FAIL] day={day} expected={result['expected_root']} computed={result['computed_root']}")
+        print(
+            f"[FAIL] day={args.day} expected={result['expected_root']} "
+            f"computed={result['computed_root']}"
+        )
         sys.exit(1)

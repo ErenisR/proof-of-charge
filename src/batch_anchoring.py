@@ -1,4 +1,5 @@
 # src/batch_anchoring.py
+import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -76,13 +77,15 @@ def build_batch_root(receipt_hashes: List[str]) -> str:
     return "0x" + root.hex()
 
 
-def anchor_day(day: str) -> Tuple[str, int]:
+def anchor_day(day: str, session_prefix: str | None = None) -> Tuple[str, int]:
     index = load_index()
     session_ids = sorted(index.keys())
     receipt_hashes: List[str] = []
     session_ids_in_day: List[str] = []
 
     for session_id in session_ids:
+        if session_prefix and not session_id.startswith(f"{session_prefix}-"):
+            continue
         entry = index[session_id]
         path = Path(entry["file"])
         if not path.exists():
@@ -108,6 +111,7 @@ def anchor_day(day: str) -> Tuple[str, int]:
     anchors["batches"].append(
         {
             "day": day,
+            "session_prefix": session_prefix,
             "batch_root": batch_root,
             "receipt_count": len(receipt_hashes),
             "session_ids": session_ids_in_day,
@@ -126,10 +130,12 @@ def anchor_day(day: str) -> Tuple[str, int]:
     return batch_root, len(receipt_hashes)
 
 
-def anchor_all_days() -> Dict[str, Any]:
+def anchor_all_days(session_prefix: str | None = None) -> Dict[str, Any]:
     index = load_index()
     days: Dict[str, List[str]] = {}
     for session_id, entry in index.items():
+        if session_prefix and not session_id.startswith(f"{session_prefix}-"):
+            continue
         path = Path(entry["file"])
         if not path.exists():
             continue
@@ -140,21 +146,27 @@ def anchor_all_days() -> Dict[str, Any]:
 
     results = {}
     for day in sorted(days.keys()):
-        batch_root, count = anchor_day(day)
+        batch_root, count = anchor_day(day, session_prefix=session_prefix)
         results[day] = {"batch_root": batch_root, "receipt_count": count}
     return results
 
 
 if __name__ == "__main__":
-    import sys
+    parser = argparse.ArgumentParser(description="Build mock batch anchors.")
+    parser.add_argument("day", nargs="?", help="Day in YYYY-MM-DD format")
+    parser.add_argument(
+        "--prefix",
+        help="Only include sessions with IDs starting with '<prefix>-'",
+    )
+    args = parser.parse_args()
 
-    if len(sys.argv) == 2:
-        day = sys.argv[1]
-        root, count = anchor_day(day)
-        print(f"[OK] day={day} batch_root={root} receipts={count}")
-    elif len(sys.argv) == 1:
-        results = anchor_all_days()
-        for day, info in results.items():
-            print(f"[OK] day={day} batch_root={info['batch_root']} receipts={info['receipt_count']}")
+    if args.day:
+        root, count = anchor_day(args.day, session_prefix=args.prefix)
+        print(f"[OK] day={args.day} batch_root={root} receipts={count}")
     else:
-        print("Usage: python -m src.batch_anchoring [YYYY-MM-DD]")
+        results = anchor_all_days(session_prefix=args.prefix)
+        for day, info in results.items():
+            print(
+                f"[OK] day={day} batch_root={info['batch_root']} "
+                f"receipts={info['receipt_count']}"
+            )
