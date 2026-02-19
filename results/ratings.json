@@ -1,0 +1,502 @@
+{
+  "users": {
+    "unknown_user": {
+      "sessions": 1006.0,
+      "total_energy_kwh": 10115.589999999993,
+      "total_duration_h": 762.583333333333,
+      "avg_energy_kwh": 10.055258449304167,
+      "avg_duration_h": 0.7580351225977465,
+      "score": 70.0
+    },
+    "user-001": {
+      "sessions": 66.0,
+      "total_energy_kwh": 656.8880000000001,
+      "total_duration_h": 48.583333333333336,
+      "avg_energy_kwh": 9.952848484848488,
+      "avg_duration_h": 0.7361111111111112,
+      "score": 70.0
+    },
+    "user-007": {
+      "sessions": 127.0,
+      "total_energy_kwh": 1418.648,
+      "total_duration_h": 96.5,
+      "avg_energy_kwh": 11.170456692913385,
+      "avg_duration_h": 0.7598425196850394,
+      "score": 70.0
+    },
+    "user-002": {
+      "sessions": 103.0,
+      "total_energy_kwh": 1137.3800000000006,
+      "total_duration_h": 79.16666666666666,
+      "avg_energy_kwh": 11.042524271844666,
+      "avg_duration_h": 0.7686084142394821,
+      "score": 70.0
+    },
+    "user-009": {
+      "sessions": 87.0,
+      "total_energy_kwh": 907.4250000000001,
+      "total_duration_h": 63.50000000000001,
+      "avg_energy_kwh": 10.430172413793104,
+      "avg_duration_h": 0.7298850574712644,
+      "score": 70.0
+    },
+    "user-005": {
+      "sessions": 98.0,
+      "total_energy_kwh": 961.5380000000006,
+      "total_duration_h": 79.16666666666669,
+      "avg_energy_kwh": 9.811612244897965,
+      "avg_duration_h": 0.8078231292517009,
+      "score": 70.0
+    },
+    "user-003": {
+      "sessions": 95.0,
+      "total_energy_kwh": 946.459,
+      "total_duration_h": 74.08333333333333,
+      "avg_energy_kwh": 9.962726315789473,
+      "avg_duration_h": 0.7798245614035088,
+      "score": 70.0
+    },
+    "user-010": {
+      "sessions": 98.0,
+      "total_energy_kwh": 1029.8819999999994,
+      "total_duration_h": 72.1666666666667,
+      "avg_energy_kwh": 10.508999999999993,
+      "avg_duration_h": 0.7363945578231296,
+      "score": 70.0
+    },
+    "user-004": {
+      "sessions": 52.0,
+      "total_energy_kwh": 489.5370000000001,
+      "total_duration_h": 37.16666666666667,
+      "avg_energy_kwh": 9.41417307692308,
+      "avg_duration_h": 0.7147435897435899,
+      "score": 70.0
+    },
+    "user-006": {
+      "sessions": 100.0,
+      "total_energy_kwh": 1071.9249999999997,
+      "total_duration_h": 73.91666666666667,
+      "avg_energy_kwh": 10.719249999999997,
+      "avg_duration_h": 0.7391666666666667,
+      "score": 70.0
+    },
+    "user-008": {
+      "sessions": 76.0,
+      "total_energy_kwh": 621.1299999999998,
+      "total_duration_h": 58.08333333333333,
+      "avg_energy_kwh": 8.172763157894734,
+      "avg_duration_h": 0.7642543859649122,
+      "score": 70.0
+    }
+  },
+  "evses": {
+    "EVSE-003": {
+      "sessions": 51.0,
+      "total_energy_kwh": 526.2540000000001,
+      "total_duration_h": 37.333333333333336,
+      "avg_energy_kwh": 10.318705882352944,
+      "avg_duration_h": 0.7320261437908497,
+      "score": 100.0
+    },
+    "EVSE-004": {
+      "sessions": 38.0,
+      "total_energy_kwh": 322.81100000000004,
+      "total_duration_h": 26.916666666666668,
+      "avg_energy_kwh": 8.495026315789474,
+      "avg_duration_h": 0.7083333333333334,
+      "score": 100.0
+    },
+    "EVSE-044": {
+      "sessions": 28.0,
+      "total_energy_kwh": 268.471,
+      "total_duration_h": 20.666666666666664,
+      "avg_energy_kwh": 9.58825,
+      "avg_duration_h": 0.738095238095238,
+      "score": 100.0
+    },
+    "EVSE-050": {
+      "sessions": 32.0,
+      "total_energy_kwh": 279.7670000000001,
+      "total_duration_h": 21.583333333333336,
+      "avg_energy_kwh": 8.742718750000003,
+      "avg_duration_h": 0.6744791666666667,
+      "score": 100.0
+    },
+    "EVSE-049": {
+      "sessions": 25.0,
+      "total_energy_kwh": 298.76,
+      "total_duration_h": 21.0,
+      "avg_energy_kwh": 11.9504,
+      "avg_duration_h": 0.84,
+      "score": 100.0
+    },
+    "EVSE-035": {
+      "sessions": 36.0,
+      "total_energy_kwh": 433.2449999999999,
+      "total_duration_h": 30.833333333333332,
+      "avg_energy_kwh": 12.03458333333333,
+      "avg_duration_h": 0.8564814814814814,
+      "score": 100.0
+    },
+    "EVSE-042": {
+      "sessions": 51.0,
+      "total_energy_kwh": 480.975,
+      "total_duration_h": 37.416666666666664,
+      "avg_energy_kwh": 9.430882352941177,
+      "avg_duration_h": 0.7336601307189542,
+      "score": 100.0
+    },
+    "EVSE-017": {
+      "sessions": 38.0,
+      "total_energy_kwh": 396.458,
+      "total_duration_h": 28.083333333333332,
+      "avg_energy_kwh": 10.433105263157895,
+      "avg_duration_h": 0.7390350877192983,
+      "score": 100.0
+    },
+    "EVSE-024": {
+      "sessions": 53.0,
+      "total_energy_kwh": 553.039,
+      "total_duration_h": 45.66666666666666,
+      "avg_energy_kwh": 10.434698113207547,
+      "avg_duration_h": 0.861635220125786,
+      "score": 100.0
+    },
+    "EVSE-041": {
+      "sessions": 41.0,
+      "total_energy_kwh": 479.54099999999994,
+      "total_duration_h": 31.83333333333333,
+      "avg_energy_kwh": 11.69612195121951,
+      "avg_duration_h": 0.7764227642276421,
+      "score": 100.0
+    },
+    "EVSE-008": {
+      "sessions": 33.0,
+      "total_energy_kwh": 417.15999999999997,
+      "total_duration_h": 28.333333333333336,
+      "avg_energy_kwh": 12.64121212121212,
+      "avg_duration_h": 0.8585858585858587,
+      "score": 100.0
+    },
+    "EVSE-007": {
+      "sessions": 29.0,
+      "total_energy_kwh": 245.035,
+      "total_duration_h": 20.33333333333333,
+      "avg_energy_kwh": 8.44948275862069,
+      "avg_duration_h": 0.7011494252873561,
+      "score": 99.5035
+    },
+    "EVSE-037": {
+      "sessions": 42.0,
+      "total_energy_kwh": 517.7909999999999,
+      "total_duration_h": 32.91666666666667,
+      "avg_energy_kwh": 12.328357142857142,
+      "avg_duration_h": 0.7837301587301588,
+      "score": 100.0
+    },
+    "EVSE-046": {
+      "sessions": 48.0,
+      "total_energy_kwh": 472.83299999999986,
+      "total_duration_h": 34.08333333333333,
+      "avg_energy_kwh": 9.850687499999998,
+      "avg_duration_h": 0.7100694444444443,
+      "score": 100.0
+    },
+    "EVSE-009": {
+      "sessions": 48.0,
+      "total_energy_kwh": 485.21099999999996,
+      "total_duration_h": 35.25,
+      "avg_energy_kwh": 10.1085625,
+      "avg_duration_h": 0.734375,
+      "score": 100.0
+    },
+    "EVSE-006": {
+      "sessions": 34.0,
+      "total_energy_kwh": 314.96100000000007,
+      "total_duration_h": 26.33333333333334,
+      "avg_energy_kwh": 9.263558823529413,
+      "avg_duration_h": 0.7745098039215688,
+      "score": 100.0
+    },
+    "EVSE-048": {
+      "sessions": 42.0,
+      "total_energy_kwh": 422.75899999999996,
+      "total_duration_h": 32.166666666666664,
+      "avg_energy_kwh": 10.065690476190476,
+      "avg_duration_h": 0.7658730158730158,
+      "score": 100.0
+    },
+    "EVSE-033": {
+      "sessions": 38.0,
+      "total_energy_kwh": 345.497,
+      "total_duration_h": 27.916666666666668,
+      "avg_energy_kwh": 9.092026315789473,
+      "avg_duration_h": 0.7346491228070176,
+      "score": 100.0
+    },
+    "EVSE-026": {
+      "sessions": 35.0,
+      "total_energy_kwh": 266.698,
+      "total_duration_h": 21.666666666666664,
+      "avg_energy_kwh": 7.619942857142856,
+      "avg_duration_h": 0.619047619047619,
+      "score": 100.0
+    },
+    "EVSE-019": {
+      "sessions": 42.0,
+      "total_energy_kwh": 439.753,
+      "total_duration_h": 32.00000000000001,
+      "avg_energy_kwh": 10.470309523809524,
+      "avg_duration_h": 0.7619047619047621,
+      "score": 100.0
+    },
+    "EVSE-045": {
+      "sessions": 49.0,
+      "total_energy_kwh": 580.052,
+      "total_duration_h": 40.49999999999999,
+      "avg_energy_kwh": 11.837795918367348,
+      "avg_duration_h": 0.8265306122448978,
+      "score": 100.0
+    },
+    "EVSE-013": {
+      "sessions": 36.0,
+      "total_energy_kwh": 432.124,
+      "total_duration_h": 30.833333333333336,
+      "avg_energy_kwh": 12.003444444444446,
+      "avg_duration_h": 0.8564814814814815,
+      "score": 100.0
+    },
+    "EVSE-039": {
+      "sessions": 35.0,
+      "total_energy_kwh": 354.669,
+      "total_duration_h": 24.416666666666664,
+      "avg_energy_kwh": 10.1334,
+      "avg_duration_h": 0.6976190476190476,
+      "score": 100.0
+    },
+    "EVSE-015": {
+      "sessions": 59.0,
+      "total_energy_kwh": 552.838,
+      "total_duration_h": 42.74999999999999,
+      "avg_energy_kwh": 9.370135593220338,
+      "avg_duration_h": 0.7245762711864405,
+      "score": 100.0
+    },
+    "EVSE-010": {
+      "sessions": 31.0,
+      "total_energy_kwh": 315.75300000000004,
+      "total_duration_h": 21.5,
+      "avg_energy_kwh": 10.185580645161291,
+      "avg_duration_h": 0.6935483870967742,
+      "score": 100.0
+    },
+    "EVSE-047": {
+      "sessions": 40.0,
+      "total_energy_kwh": 384.6350000000001,
+      "total_duration_h": 29.5,
+      "avg_energy_kwh": 9.615875000000003,
+      "avg_duration_h": 0.7375,
+      "score": 100.0
+    },
+    "EVSE-030": {
+      "sessions": 44.0,
+      "total_energy_kwh": 350.1749999999999,
+      "total_duration_h": 32.0,
+      "avg_energy_kwh": 7.958522727272725,
+      "avg_duration_h": 0.7272727272727273,
+      "score": 100.0
+    },
+    "EVSE-011": {
+      "sessions": 36.0,
+      "total_energy_kwh": 277.88900000000007,
+      "total_duration_h": 24.333333333333336,
+      "avg_energy_kwh": 7.7191388888888905,
+      "avg_duration_h": 0.675925925925926,
+      "score": 100.0
+    },
+    "EVSE-025": {
+      "sessions": 26.0,
+      "total_energy_kwh": 306.913,
+      "total_duration_h": 20.166666666666664,
+      "avg_energy_kwh": 11.804346153846154,
+      "avg_duration_h": 0.7756410256410255,
+      "score": 100.0
+    },
+    "EVSE-028": {
+      "sessions": 40.0,
+      "total_energy_kwh": 391.7740000000001,
+      "total_duration_h": 28.499999999999996,
+      "avg_energy_kwh": 9.794350000000003,
+      "avg_duration_h": 0.7124999999999999,
+      "score": 100.0
+    },
+    "EVSE-002": {
+      "sessions": 20.0,
+      "total_energy_kwh": 213.79000000000002,
+      "total_duration_h": 14.999999999999998,
+      "avg_energy_kwh": 10.6895,
+      "avg_duration_h": 0.7499999999999999,
+      "score": 91.379
+    },
+    "EVSE-043": {
+      "sessions": 43.0,
+      "total_energy_kwh": 447.27299999999997,
+      "total_duration_h": 33.916666666666664,
+      "avg_energy_kwh": 10.401697674418603,
+      "avg_duration_h": 0.7887596899224806,
+      "score": 100.0
+    },
+    "EVSE-001": {
+      "sessions": 45.0,
+      "total_energy_kwh": 564.0799999999998,
+      "total_duration_h": 35.24999999999999,
+      "avg_energy_kwh": 12.535111111111107,
+      "avg_duration_h": 0.7833333333333332,
+      "score": 100.0
+    },
+    "EVSE-016": {
+      "sessions": 35.0,
+      "total_energy_kwh": 416.337,
+      "total_duration_h": 26.0,
+      "avg_energy_kwh": 11.895342857142857,
+      "avg_duration_h": 0.7428571428571429,
+      "score": 100.0
+    },
+    "EVSE-029": {
+      "sessions": 31.0,
+      "total_energy_kwh": 360.782,
+      "total_duration_h": 25.416666666666664,
+      "avg_energy_kwh": 11.638129032258064,
+      "avg_duration_h": 0.8198924731182795,
+      "score": 100.0
+    },
+    "EVSE-036": {
+      "sessions": 38.0,
+      "total_energy_kwh": 334.547,
+      "total_duration_h": 25.333333333333332,
+      "avg_energy_kwh": 8.803868421052632,
+      "avg_duration_h": 0.6666666666666666,
+      "score": 100.0
+    },
+    "EVSE-032": {
+      "sessions": 42.0,
+      "total_energy_kwh": 401.80500000000006,
+      "total_duration_h": 30.999999999999996,
+      "avg_energy_kwh": 9.566785714285716,
+      "avg_duration_h": 0.738095238095238,
+      "score": 100.0
+    },
+    "EVSE-012": {
+      "sessions": 35.0,
+      "total_energy_kwh": 331.3350000000001,
+      "total_duration_h": 27.333333333333336,
+      "avg_energy_kwh": 9.46671428571429,
+      "avg_duration_h": 0.7809523809523811,
+      "score": 100.0
+    },
+    "EVSE-027": {
+      "sessions": 43.0,
+      "total_energy_kwh": 435.798,
+      "total_duration_h": 31.916666666666664,
+      "avg_energy_kwh": 10.134837209302326,
+      "avg_duration_h": 0.7422480620155039,
+      "score": 100.0
+    },
+    "EVSE-031": {
+      "sessions": 29.0,
+      "total_energy_kwh": 299.6410000000001,
+      "total_duration_h": 21.25,
+      "avg_energy_kwh": 10.332448275862072,
+      "avg_duration_h": 0.7327586206896551,
+      "score": 100.0
+    },
+    "EVSE-005": {
+      "sessions": 54.0,
+      "total_energy_kwh": 520.3029999999999,
+      "total_duration_h": 43.83333333333334,
+      "avg_energy_kwh": 9.63524074074074,
+      "avg_duration_h": 0.8117283950617286,
+      "score": 100.0
+    },
+    "EVSE-040": {
+      "sessions": 32.0,
+      "total_energy_kwh": 363.04999999999995,
+      "total_duration_h": 25.083333333333332,
+      "avg_energy_kwh": 11.345312499999999,
+      "avg_duration_h": 0.7838541666666666,
+      "score": 100.0
+    },
+    "EVSE-018": {
+      "sessions": 39.0,
+      "total_energy_kwh": 435.60400000000004,
+      "total_duration_h": 30.999999999999993,
+      "avg_energy_kwh": 11.169333333333334,
+      "avg_duration_h": 0.7948717948717947,
+      "score": 100.0
+    },
+    "EVSE-021": {
+      "sessions": 40.0,
+      "total_energy_kwh": 333.677,
+      "total_duration_h": 27.000000000000007,
+      "avg_energy_kwh": 8.341925,
+      "avg_duration_h": 0.6750000000000002,
+      "score": 100.0
+    },
+    "EVSE-038": {
+      "sessions": 25.0,
+      "total_energy_kwh": 196.53,
+      "total_duration_h": 18.999999999999996,
+      "avg_energy_kwh": 7.8612,
+      "avg_duration_h": 0.7599999999999999,
+      "score": 94.65299999999999
+    },
+    "EVSE-020": {
+      "sessions": 26.0,
+      "total_energy_kwh": 251.75599999999994,
+      "total_duration_h": 21.41666666666667,
+      "avg_energy_kwh": 9.682923076923075,
+      "avg_duration_h": 0.8237179487179489,
+      "score": 100.0
+    },
+    "EVSE-034": {
+      "sessions": 41.0,
+      "total_energy_kwh": 519.502,
+      "total_duration_h": 36.24999999999999,
+      "avg_energy_kwh": 12.670780487804876,
+      "avg_duration_h": 0.8841463414634144,
+      "score": 100.0
+    },
+    "EVSE-023": {
+      "sessions": 46.0,
+      "total_energy_kwh": 484.251,
+      "total_duration_h": 36.75000000000001,
+      "avg_energy_kwh": 10.527195652173912,
+      "avg_duration_h": 0.798913043478261,
+      "score": 100.0
+    },
+    "EVSE-022": {
+      "sessions": 34.0,
+      "total_energy_kwh": 302.86999999999995,
+      "total_duration_h": 25.166666666666664,
+      "avg_energy_kwh": 8.907941176470587,
+      "avg_duration_h": 0.7401960784313725,
+      "score": 100.0
+    },
+    "EVSE-014": {
+      "sessions": 29.0,
+      "total_energy_kwh": 210.90999999999997,
+      "total_duration_h": 19.0,
+      "avg_energy_kwh": 7.272758620689654,
+      "avg_duration_h": 0.6551724137931034,
+      "score": 96.091
+    },
+    "EVSE-42": {
+      "sessions": 1.0,
+      "total_energy_kwh": 18.72,
+      "total_duration_h": 1.1666666666666667,
+      "avg_energy_kwh": 18.72,
+      "avg_duration_h": 1.1666666666666667,
+      "score": 52.872
+    }
+  }
+}
