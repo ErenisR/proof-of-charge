@@ -55,6 +55,10 @@ def export_all() -> None:
                 "merkle_root": receipt.get("merkle_root"),
                 "pricing_model": (receipt.get("pricing") or {}).get("model"),
                 "energy_kwh": receipt.get("energy_kwh"),
+                "import_kwh": (receipt.get("energy_summary") or {}).get("import_kwh"),
+                "export_kwh": (receipt.get("energy_summary") or {}).get("export_kwh"),
+                "net_kwh": (receipt.get("energy_summary") or {}).get("net_kwh"),
+                "schema_version": receipt.get("schema_version"),
                 "start_ts": receipt.get("start_ts"),
                 "end_ts": receipt.get("end_ts"),
                 "batch_root": entry.get("batch_root"),
@@ -71,6 +75,10 @@ def export_all() -> None:
                     "start_ts": session.get("start_ts"),
                     "end_ts": session.get("end_ts"),
                     "energy_kwh": receipt.get("energy_kwh"),
+                    "session_type": session.get("session_type"),
+                    "import_kwh": (receipt.get("energy_summary") or {}).get("import_kwh"),
+                    "export_kwh": (receipt.get("energy_summary") or {}).get("export_kwh"),
+                    "net_kwh": (receipt.get("energy_summary") or {}).get("net_kwh"),
                     "tariff_model": (session.get("pricing") or {}).get("model"),
                 }
             )
@@ -81,6 +89,8 @@ def export_all() -> None:
                         "session_id": session_id,
                         "ts": mv.get("ts"),
                         "energy_kwh": mv.get("energy_kwh"),
+                        "import_kwh": mv.get("import_kwh"),
+                        "export_kwh": mv.get("export_kwh"),
                     }
                 )
 
@@ -120,6 +130,10 @@ def export_all() -> None:
             "merkle_root",
             "pricing_model",
             "energy_kwh",
+            "import_kwh",
+            "export_kwh",
+            "net_kwh",
+            "schema_version",
             "start_ts",
             "end_ts",
             "batch_root",
@@ -129,12 +143,24 @@ def export_all() -> None:
     _write_csv(
         EXPORT_DIR / "sessions.csv",
         sessions_rows,
-        ["session_id", "user_id", "evse_id", "start_ts", "end_ts", "energy_kwh", "tariff_model"],
+        [
+            "session_id",
+            "user_id",
+            "evse_id",
+            "start_ts",
+            "end_ts",
+            "session_type",
+            "energy_kwh",
+            "import_kwh",
+            "export_kwh",
+            "net_kwh",
+            "tariff_model",
+        ],
     )
     _write_csv(
         EXPORT_DIR / "meter_values.csv",
         meter_rows,
-        ["session_id", "ts", "energy_kwh"],
+        ["session_id", "ts", "energy_kwh", "import_kwh", "export_kwh"],
     )
     _write_csv(
         EXPORT_DIR / "anchors.csv",

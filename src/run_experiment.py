@@ -41,6 +41,133 @@ def _load_payload(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _to_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _parse_ts(ts: str) -> datetime:
+    if ts.endswith("Z"):
+        ts = ts.replace("Z", "+00:00")
+    return datetime.fromisoformat(ts)
+
+
+def _coerce_components(pricing: Dict[str, Any], keys: list[str]) -> List[Dict[str, Any]]:
+    for key in keys:
+        comps = pricing.get(key)
+        if isinstance(comps, list):
+            return comps
+    return []
+
+
+def _sum_component_cost(
+    start_ts: str,
+    end_ts: str,
+    energy_kwh: float,
+    components: List[Dict[str, Any]],
+) -> float:
+    if not start_ts or not end_ts:
+        return 0.0
+    if not components or energy_kwh == 0:
+        return 0.0
+    try:
+        session_start = _parse_ts(start_ts)
+        session_end = _parse_ts(end_ts)
+        session_seconds = (session_end - session_start).total_seconds()
+    except Exception:
+        return 0.0
+    if session_seconds <= 0:
+        return 0.0
+
+    total = 0.0
+    for comp in components:
+        c_from = comp.get("from")
+        c_to = comp.get("to")
+        if not c_from or not c_to:
+            continue
+        try:
+            c_start = _parse_ts(c_from)
+            c_end = _parse_ts(c_to)
+            overlap_start = max(session_start, c_start)
+            overlap_end = min(session_end, c_end)
+            overlap_seconds = (overlap_end - overlap_start).total_seconds()
+            if overlap_seconds <= 0:
+                continue
+            share = overlap_seconds / session_seconds
+            price = _to_float(comp.get("price_per_kwh"), 0.0)
+            total += energy_kwh * share * price
+        except Exception:
+            continue
+    return round(total, 3)
+
+
+def _meter_delta(meter_values: List[Dict[str, Any]]) -> tuple[float, float]:
+    if not meter_values or len(meter_values) < 2:
+        return 0.0, 0.0
+    first = meter_values[0]
+    last = meter_values[-1]
+    import_start = _to_float(first.get("import_kwh"), 0.0)
+    export_start = _to_float(first.get("export_kwh"), 0.0)
+    import_end = _to_float(last.get("import_kwh"), 0.0)
+    export_end = _to_float(last.get("export_kwh"), 0.0)
+    return round(import_end - import_start, 3), round(export_end - export_start, 3)
+
+
+def _session_audit(session: Dict[str, Any], receipt: Dict[str, Any]) -> Dict[str, Any]:
+    meter_values = session.get("meter_values", []) or []
+    measured_import_kwh, measured_export_kwh = _meter_delta(meter_values)
+    measured_net_kwh = round(measured_import_kwh - measured_export_kwh, 3)
+
+    summary = session.get("energy_summary") or {}
+    summary_import_kwh = round(_to_float(summary.get("import_kwh"), measured_import_kwh), 3)
+    summary_export_kwh = round(_to_float(summary.get("export_kwh"), measured_export_kwh), 3)
+    summary_net_kwh = round(_to_float(summary.get("net_kwh"), measured_net_kwh), 3)
+
+    receipt_summary = receipt.get("energy_summary", {})
+    receipt_import_kwh = round(_to_float(receipt_summary.get("import_kwh"), measured_import_kwh), 3)
+    receipt_export_kwh = round(_to_float(receipt_summary.get("export_kwh"), measured_export_kwh), 3)
+    receipt_net_kwh = round(_to_float(receipt_summary.get("net_kwh"), measured_net_kwh), 3)
+
+    pricing = session.get("pricing", {})
+    start_ts = session.get("start_ts")
+    end_ts = session.get("end_ts")
+    import_components = _coerce_components(pricing, ["import_components", "components"])
+    export_components = _coerce_components(pricing, ["export_components", "components"])
+
+    expected_import_cost = _sum_component_cost(start_ts, end_ts, receipt_import_kwh, import_components)
+    expected_export_credit = _sum_component_cost(start_ts, end_ts, receipt_export_kwh, export_components)
+    expected_net_amount = round(expected_import_cost - expected_export_credit, 3)
+    settlement = receipt.get("settlement", {})
+    actual_net_amount = round(_to_float(settlement.get("net_amount")), 3)
+
+    import_ok = measured_import_kwh == receipt_import_kwh == summary_import_kwh
+    export_ok = measured_export_kwh == receipt_export_kwh == summary_export_kwh
+    net_ok = measured_net_kwh == receipt_net_kwh == summary_net_kwh
+    settlement_ok = actual_net_amount == expected_net_amount
+    audit_ok = all([import_ok, export_ok, net_ok, settlement_ok])
+
+    reasons = []
+    if not import_ok:
+        reasons.append("import_kwh mismatch")
+    if not export_ok:
+        reasons.append("export_kwh mismatch")
+    if not net_ok:
+        reasons.append("net_kwh mismatch")
+    if not settlement_ok:
+        reasons.append("settlement mismatch")
+
+    return {
+        "import_consistent": str(import_ok),
+        "export_consistent": str(export_ok),
+        "net_consistent": str(net_ok),
+        "settlement_consistent": str(settlement_ok),
+        "audit_ok": str(audit_ok),
+        "audit_reason": "; ".join(reasons),
+    }
+
+
 def _write_csv(path: Path, rows: Iterable[Dict[str, Any]], fieldnames: List[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as f:
@@ -56,6 +183,9 @@ def _finalize_synthetic_sessions(
     session_prefix: str,
     seed: int,
     registry_path: Path | None = None,
+    session_type: str = "auto",
+    bidirectional_ratio: float = 0.30,
+    discharge_ratio: float = 0.15,
 ) -> Dict[str, Any]:
     registry = _load_registry(registry_path) if registry_path else None
     rng = random.Random(seed)
@@ -71,6 +201,9 @@ def _finalize_synthetic_sessions(
             base_now=base_now,
             session_prefix=session_prefix,
             deterministic_tx=True,
+            session_mode=session_type,
+            bidirectional_ratio=bidirectional_ratio,
+            discharge_ratio=discharge_ratio,
         )
         receipt = build_receipt(session)
         receipt_hash = hash_receipt(receipt)
@@ -114,6 +247,9 @@ def _build_run_exports(
                 "receipt_hash": expected_hash,
                 "merkle_root": receipt.get("merkle_root"),
                 "energy_kwh": receipt.get("energy_kwh"),
+                "import_kwh": (receipt.get("energy_summary") or {}).get("import_kwh"),
+                "export_kwh": (receipt.get("energy_summary") or {}).get("export_kwh"),
+                "net_kwh": (receipt.get("energy_summary") or {}).get("net_kwh"),
                 "start_ts": receipt.get("start_ts"),
                 "end_ts": receipt.get("end_ts"),
                 "batch_day": entry.get("batch_day"),
@@ -127,6 +263,7 @@ def _build_run_exports(
                 "evse_id": session.get("evse_id"),
                 "start_ts": session.get("start_ts"),
                 "end_ts": session.get("end_ts"),
+                "session_type": session.get("session_type"),
                 "tariff_model": (session.get("pricing") or {}).get("model"),
             }
         )
@@ -136,13 +273,17 @@ def _build_run_exports(
                     "session_id": session_id,
                     "ts": mv.get("ts"),
                     "energy_kwh": mv.get("energy_kwh"),
+                    "import_kwh": mv.get("import_kwh"),
+                    "export_kwh": mv.get("export_kwh"),
                 }
             )
+        audit = _session_audit(session, receipt)
         verify_rows.append(
             {
                 "session_id": session_id,
                 "expected_hash": expected_hash,
                 "computed_hash": computed_hash,
+                **audit,
                 "match": str(expected_hash == computed_hash),
                 "batch_day": day,
                 "batch_root": batch_root,
@@ -158,6 +299,9 @@ def _build_run_exports(
             "receipt_hash",
             "merkle_root",
             "energy_kwh",
+            "import_kwh",
+            "export_kwh",
+            "net_kwh",
             "start_ts",
             "end_ts",
             "batch_day",
@@ -167,17 +311,30 @@ def _build_run_exports(
     _write_csv(
         run_dir / "datasets" / "sessions.csv",
         sessions_rows,
-        ["session_id", "user_id", "evse_id", "start_ts", "end_ts", "tariff_model"],
+        ["session_id", "user_id", "evse_id", "start_ts", "end_ts", "session_type", "tariff_model"],
     )
     _write_csv(
         run_dir / "datasets" / "meter_values.csv",
         meter_rows,
-        ["session_id", "ts", "energy_kwh"],
+        ["session_id", "ts", "energy_kwh", "import_kwh", "export_kwh"],
     )
     _write_csv(
         run_dir / "datasets" / "verifications.csv",
         verify_rows,
-        ["session_id", "expected_hash", "computed_hash", "match", "batch_day", "batch_root"],
+        [
+            "session_id",
+            "expected_hash",
+            "computed_hash",
+            "match",
+            "import_consistent",
+            "export_consistent",
+            "net_consistent",
+            "settlement_consistent",
+            "audit_ok",
+            "audit_reason",
+            "batch_day",
+            "batch_root",
+        ],
     )
     _write_csv(
         run_dir / "datasets" / "anchors.csv",
@@ -218,6 +375,9 @@ def run_experiment(
     seed: int = 42,
     run_id: str | None = None,
     registry_path: Path | None = None,
+    session_type: str = "auto",
+    bidirectional_ratio: float = 0.30,
+    discharge_ratio: float = 0.15,
 ) -> Dict[str, Any]:
     run_id = run_id or _default_run_id()
     run_dir = RESULTS_DIR / run_id
@@ -229,6 +389,9 @@ def run_experiment(
         session_prefix=run_id,
         seed=seed,
         registry_path=registry_path,
+        session_type=session_type,
+        bidirectional_ratio=bidirectional_ratio,
+        discharge_ratio=discharge_ratio,
     )
 
     batch_root, anchored_count = anchor_day(day, session_prefix=run_id)
@@ -267,6 +430,9 @@ def run_experiment(
                 "num_sessions": num_sessions,
                 "day": day,
                 "seed": seed,
+                "session_type": session_type,
+                "bidirectional_ratio": bidirectional_ratio,
+                "discharge_ratio": discharge_ratio,
                 "registry_path": str(registry_path) if registry_path else None,
             },
             "metrics": metrics,
@@ -291,6 +457,24 @@ if __name__ == "__main__":
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
     parser.add_argument(
+        "--session-type",
+        default="auto",
+        choices=["auto", "all", "charge_only", "discharge_only", "bidirectional"],
+        help="Session type mode. `all` cycles through charge/discharge/bidirectional.",
+    )
+    parser.add_argument(
+        "--bidirectional-ratio",
+        type=float,
+        default=0.30,
+        help="Ratio for bidirectional when session_type=auto",
+    )
+    parser.add_argument(
+        "--discharge-ratio",
+        type=float,
+        default=0.15,
+        help="Ratio for discharge_only when session_type=auto",
+    )
+    parser.add_argument(
         "--run-id",
         help="Optional run ID used as session prefix and result folder name",
     )
@@ -307,5 +491,8 @@ if __name__ == "__main__":
         seed=args.seed,
         run_id=args.run_id,
         registry_path=args.registry,
+        session_type=args.session_type,
+        bidirectional_ratio=args.bidirectional_ratio,
+        discharge_ratio=args.discharge_ratio,
     )
     print(json.dumps(result, indent=2, sort_keys=True))

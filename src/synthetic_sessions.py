@@ -14,6 +14,28 @@ from urllib.request import Request, urlopen
 API_URL = "http://127.0.0.1:8000/v1/receipts/finalize"
 
 USERS: List[str] = [f"user-{i:03d}" for i in range(1, 11)]
+SESSION_TYPES = ("charge_only", "discharge_only", "bidirectional")
+
+
+def _resolve_session_type(
+    i: int,
+    rng: random.Random,
+    session_mode: str = "auto",
+    bidirectional_ratio: float = 0.30,
+    discharge_ratio: float = 0.15,
+) -> str:
+    if session_mode == "all":
+        return SESSION_TYPES[(i - 1) % len(SESSION_TYPES)]
+
+    if session_mode in SESSION_TYPES:
+        return session_mode
+
+    p = rng.random()
+    if p < bidirectional_ratio:
+        return "bidirectional"
+    if p < bidirectional_ratio + discharge_ratio:
+        return "discharge_only"
+    return "charge_only"
 
 
 def generate_meter_values(
@@ -21,27 +43,52 @@ def generate_meter_values(
     duration_minutes: int,
     interval_minutes: int,
     avg_power_kw: float,
+    session_type: str = "charge_only",
     rng: random.Random | None = None,
 ) -> List[Dict[str, Any]]:
     """
-    Generate synthetic meter values with monotone energy_kwh.
+    Generate synthetic meter values as V2G-ready cumulative import/export counters.
     """
     rng = rng or random
     num_points = duration_minutes // interval_minutes + 1
     mvs = []
-    energy = 0.0
+    import_kwh = 0.0
+    export_kwh = 0.0
     ts = start_ts
+    discharge_points = 0
+    discharge_start = 0
+
+    if session_type == "bidirectional" and num_points > 2:
+        max_discharge_points = max(1, num_points - 2)
+        discharge_points = rng.randint(1, max_discharge_points // 2 + 1)
+        if discharge_points >= max_discharge_points:
+            discharge_points = max_discharge_points
+        discharge_start = rng.randint(0, max_discharge_points - discharge_points)
 
     for i in range(num_points):
         if i > 0:
             # add random variation around avg_power
             power_kw = max(0.0, rng.gauss(avg_power_kw, avg_power_kw * 0.1))
             hours = interval_minutes / 60.0
-            energy += power_kw * hours
+            delta_kwh = power_kw * hours
 
+            if session_type == "charge_only":
+                import_kwh += delta_kwh
+            elif session_type == "discharge_only":
+                export_kwh += delta_kwh
+            else:
+                in_discharge_window = discharge_start <= (i - 1) < (discharge_start + discharge_points)
+                if in_discharge_window:
+                    export_kwh += delta_kwh
+                else:
+                    import_kwh += delta_kwh
+
+        net_kwh = import_kwh - export_kwh
         mvs.append({
             "ts": ts.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
-            "energy_kwh": round(energy, 3)
+            "import_kwh": round(import_kwh, 3),
+            "export_kwh": round(export_kwh, 3),
+            "energy_kwh": round(net_kwh, 3),
         })
         ts += timedelta(minutes=interval_minutes)
 
@@ -71,18 +118,23 @@ def generate_session(
     base_now: datetime | None = None,
     session_prefix: str = "synth",
     deterministic_tx: bool = False,
+    session_mode: str = "auto",
+    bidirectional_ratio: float = 0.30,
+    discharge_ratio: float = 0.15,
 ) -> Dict[str, Any]:
     """
-    Generate a single synthetic session matching SessionInput schema.
+    Generate a single synthetic session using a V2G-ready schema.
+    Session type is determined by session_mode.
     """
     rng = rng or random
     user_id = rng.choice(USERS)
     now = base_now or datetime.now(timezone.utc)
-    # Spread sessions over the last 24h
+
     start_ts = now - timedelta(hours=rng.uniform(0, 24))
-    duration = rng.choice([20, 30, 40, 60, 75])  # minutes
-    interval = 5  # meter value every 5 minutes
-    avg_power_kw = rng.choice([7.2, 11.0, 22.0])  # typical AC chargers
+    duration = rng.choice([20, 30, 40, 60, 75])
+    interval = 5
+    avg_power_kw = rng.choice([7.2, 11.0, 22.0])
+
     evse_row = _pick_evse(registry or [], rng=rng)
     if evse_row:
         try:
@@ -90,33 +142,81 @@ def generate_session(
         except Exception:
             pass
 
-    mvs = generate_meter_values(start_ts, duration, interval, avg_power_kw, rng=rng)
+    session_type = _resolve_session_type(
+        i=i,
+        rng=rng,
+        session_mode=session_mode or "auto",
+        bidirectional_ratio=bidirectional_ratio,
+        discharge_ratio=discharge_ratio,
+    )
+
+    mvs = generate_meter_values(
+        start_ts,
+        duration,
+        interval,
+        avg_power_kw,
+        session_type=session_type,
+        rng=rng,
+    )
+
     session_id = f"{session_prefix}-{i:04d}"
     evse_id = evse_row.get("evse_id") if evse_row else f"EVSE-{rng.randint(1, 50):03d}"
+
     if deterministic_tx:
         ocpp_tx_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{session_id}:{start_ts.isoformat()}"))
     else:
         ocpp_tx_id = str(uuid.uuid4())
 
+    import_kwh = round(float(mvs[-1]["import_kwh"]) - float(mvs[0]["import_kwh"]), 3)
+    export_kwh = round(float(mvs[-1]["export_kwh"]) - float(mvs[0]["export_kwh"]), 3)
+    net_kwh = round(import_kwh - export_kwh, 3)
+
+    import_price = round(rng.uniform(0.15, 0.35), 3)
+    export_price = round(rng.uniform(0.05, 0.20), 3)
+
+    gross_import_cost = round(import_kwh * import_price, 3)
+    gross_export_credit = round(export_kwh * export_price, 3)
+    net_amount = round(gross_import_cost - gross_export_credit, 3)
+
     session = {
+        "schema_version": "v2g-v1",
         "session_id": session_id,
         "user_id": user_id,
         "evse_id": evse_id,
         "ocpp_tx_id": ocpp_tx_id,
+        "session_type": session_type,
         "start_ts": mvs[0]["ts"],
         "end_ts": mvs[-1]["ts"],
         "meter_values": mvs,
+        "energy_summary": {
+            "import_kwh": import_kwh,
+            "export_kwh": export_kwh,
+            "net_kwh": net_kwh,
+        },
         "pricing": {
             "currency": "EUR",
             "model": "TOU",
-            "components": [
+            "import_components": [
                 {
                     "from": mvs[0]["ts"],
                     "to": mvs[-1]["ts"],
-                    "price_per_kwh": round(rng.uniform(0.15, 0.35), 3)
+                    "price_per_kwh": import_price,
                 }
-            ]
-        }
+            ],
+            "export_components": [
+                {
+                    "from": mvs[0]["ts"],
+                    "to": mvs[-1]["ts"],
+                    "price_per_kwh": export_price,
+                }
+            ],
+        },
+        "settlement": {
+            "gross_import_cost": gross_import_cost,
+            "gross_export_credit": gross_export_credit,
+            "net_amount": net_amount,
+            "currency": "EUR",
+        },
     }
     return session
 
@@ -143,11 +243,27 @@ def run_synthetic_sessions(
     num_sessions: int,
     registry: List[Dict[str, Any]] | None = None,
     rng: random.Random | None = None,
+    session_type: str = "auto",
+    bidirectional_ratio: float = 0.30,
+    discharge_ratio: float = 0.15,
 ) -> dict:
     t0 = time.perf_counter()
     rng = rng or random
+    if session_type not in {"auto", "all", *SESSION_TYPES}:
+        raise ValueError(f"Unsupported session_type: {session_type}")
+    if not (0.0 <= bidirectional_ratio <= 1.0 and 0.0 <= discharge_ratio <= 1.0):
+        raise ValueError("Ratios must be between 0.0 and 1.0")
+    if bidirectional_ratio + discharge_ratio > 1.0:
+        raise ValueError("bidirectional_ratio + discharge_ratio must not exceed 1.0")
     for i in range(1, num_sessions + 1):
-        sess = generate_session(i, registry=registry, rng=rng)
+        sess = generate_session(
+            i,
+            registry=registry,
+            rng=rng,
+            session_mode=session_type,
+            bidirectional_ratio=bidirectional_ratio,
+            discharge_ratio=discharge_ratio,
+        )
         send_session(sess)
     t1 = time.perf_counter()
     elapsed = t1 - t0
@@ -165,10 +281,34 @@ if __name__ == "__main__":
         type=Path,
         help="Path to EVSE registry CSV used to sample real EVSE IDs",
     )
+    parser.add_argument(
+        "--session-type",
+        default="auto",
+        choices=["auto", "all", "charge_only", "discharge_only", "bidirectional"],
+        help="Session type mode. `all` cycles through charge/discharge/bidirectional.",
+    )
+    parser.add_argument(
+        "--bidirectional-ratio",
+        type=float,
+        default=0.30,
+        help="Ratio for bidirectional when session_type=auto",
+    )
+    parser.add_argument(
+        "--discharge-ratio",
+        type=float,
+        default=0.15,
+        help="Ratio for discharge_only when session_type=auto",
+    )
     args = parser.parse_args()
 
     registry = _load_registry(args.registry) if args.registry else None
-    stats = run_synthetic_sessions(args.num_sessions, registry=registry)
+    stats = run_synthetic_sessions(
+        args.num_sessions,
+        registry=registry,
+        session_type=args.session_type,
+        bidirectional_ratio=args.bidirectional_ratio,
+        discharge_ratio=args.discharge_ratio,
+    )
     print(
         f"\nGenerated and finalized {stats['num_sessions']} sessions "
         f"in {stats['t_finalize_total']:.3f} s "

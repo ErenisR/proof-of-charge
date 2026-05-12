@@ -1,7 +1,7 @@
 # src/main.py
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 from .receipt_builder import build_receipt, hash_receipt
 from .storage import save_receipt
 
@@ -9,7 +9,9 @@ app = FastAPI(title="Proof-of-Charge MVP")
 
 class MeterValue(BaseModel):
     ts: str
-    energy_kwh: float
+    energy_kwh: float | None = None
+    import_kwh: float | None = None
+    export_kwh: float | None = None
 
 class PricingComponent(BaseModel):
     from_ts: str = Field(..., alias="from")
@@ -20,6 +22,8 @@ class Pricing(BaseModel):
     currency: str = "EUR"
     model: str = "TOU"
     components: List[PricingComponent] = []
+    import_components: List[PricingComponent] = []
+    export_components: List[PricingComponent] = []
 
 class SessionInput(BaseModel):
     session_id: str
@@ -28,6 +32,10 @@ class SessionInput(BaseModel):
     ocpp_tx_id: str
     start_ts: str
     end_ts: str
+    schema_version: str | None = "v2g-v1"
+    session_type: str | None = "charge_only"
+    energy_summary: Dict[str, Any] | None = None
+    settlement: Dict[str, Any] | None = None
     meter_values: List[MeterValue]
     pricing: Pricing | None = None
 
