@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from src.models import Base, BatchAnchor, MeterValue, Verification
+from src.models import Base, BatchAnchor, BatchAnchorReceipt, MeterValue, Verification
 from src.receipt_builder import build_receipt, hash_receipt
 from src.receipt_schema import DEFAULT_SCHEMA_VERSION
 from src.repository import (
@@ -109,22 +109,34 @@ def test_persist_batch_anchor_and_verification():
     }
 
     with Session(engine) as db_session:
+        session_payload = _session()
+        receipt = build_receipt(session_payload)
+        receipt_hash = hash_receipt(receipt)
+        persist_finalized_session(session_payload, receipt, receipt_hash, db_session=db_session)
         persist_batch_anchor(
             day="2026-03-07",
             session_prefix="run-test",
             batch_root="0xabc",
             receipt_count=2,
+            receipt_memberships=[
+                {"session_id": "db-session-001", "receipt_hash": receipt_hash, "leaf_index": 0}
+            ],
             db_session=db_session,
         )
         persist_batch_verification(result, db_session=db_session)
         db_session.commit()
 
         anchor = db_session.query(BatchAnchor).one()
+        membership = db_session.query(BatchAnchorReceipt).one()
         verification = db_session.query(Verification).one()
 
         assert anchor.day == "2026-03-07"
         assert anchor.session_prefix == "run-test"
         assert anchor.batch_root == "0xabc"
+        assert membership.anchor_id == anchor.id
+        assert membership.session_id == "db-session-001"
+        assert membership.receipt_hash == receipt_hash
+        assert membership.leaf_index == 0
         assert verification.verification_type == "batch"
         assert verification.match is True
         assert verification.details_json["receipt_count"] == 2

@@ -73,6 +73,13 @@ def test_export_all_from_db_writes_research_csvs(tmp_path):
             session_prefix="run-export",
             batch_root="0xbatchroot",
             receipt_count=1,
+            receipt_memberships=[
+                {
+                    "session_id": "run-export-0001",
+                    "receipt_hash": receipt_hash,
+                    "leaf_index": 0,
+                }
+            ],
             db_session=db_session,
         )
         persist_batch_verification(verification, db_session=db_session)

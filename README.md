@@ -175,6 +175,7 @@ Current database tables:
 - `meter_values`
 - `receipts`
 - `batch_anchors`
+- `batch_anchor_receipts`
 - `verifications`
 
 Database relationship diagram:
@@ -184,6 +185,8 @@ erDiagram
   SESSIONS ||--o{ METER_VALUES : has
   SESSIONS ||--|| RECEIPTS : produces
   SESSIONS ||--o{ VERIFICATIONS : checked_by
+  SESSIONS ||--o{ BATCH_ANCHOR_RECEIPTS : included_as
+  BATCH_ANCHORS ||--o{ BATCH_ANCHOR_RECEIPTS : contains
   BATCH_ANCHORS ||--o{ VERIFICATIONS : verified_by
 
   SESSIONS {
@@ -240,6 +243,15 @@ erDiagram
     datetime anchored_at
   }
 
+  BATCH_ANCHOR_RECEIPTS {
+    int id PK
+    int anchor_id FK
+    string session_id FK
+    string receipt_hash
+    int leaf_index
+    datetime created_at
+  }
+
   VERIFICATIONS {
     int id PK
     string session_id FK
@@ -258,6 +270,10 @@ erDiagram
 The receipt table stores normalized fields for querying plus the full
 `receipt_json` payload for auditability. The session table does the same with
 `session_json`.
+
+`batch_anchor_receipts` stores the exact receipt-hash snapshot included in each
+batch anchor. `leaf_index` records the receipt hash position after deterministic
+sorting for Merkle tree construction.
 
 To drop the local schema during development:
 
@@ -319,7 +335,8 @@ python3 -m src.batch_anchoring 2026-03-07 --prefix run_20260307_223049
 
 Anchoring is currently mocked: it computes and stores a Merkle batch root, but
 does not submit a real blockchain transaction yet. When `DATABASE_URL` is set,
-anchoring reads receipt hashes from Postgres and writes to `batch_anchors`.
+anchoring reads receipt hashes from Postgres and writes to `batch_anchors` plus
+`batch_anchor_receipts`.
 Without `DATABASE_URL`, it falls back to `receipts/index.json`, writes to
 `receipts/anchors.json`, and updates the local receipt index with `batch_root`
 and `batch_day`.
@@ -435,6 +452,7 @@ Current coverage focuses on:
 - import/export/net energy math
 - rejection of non-monotone meter counters
 - file-backed and DB-backed batch anchoring and batch verification
+- exact batch anchor receipt membership snapshots
 - detection of a tampered receipt
 - SQLAlchemy persistence for sessions, meter values, and receipts
 - DB-backed CSV exports

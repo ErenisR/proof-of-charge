@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from src import batch_anchoring, verifier, verifier_batch
-from src.models import Base, BatchAnchor, Verification
+from src.models import Base, BatchAnchor, BatchAnchorReceipt, Receipt, Verification
 from src.receipt_builder import build_receipt, hash_receipt
 from src.receipt_schema import DEFAULT_SCHEMA_VERSION
 from src.repository import persist_finalized_session
@@ -131,15 +131,19 @@ def test_anchor_day_and_verify_day_from_db_round_trip():
         )
 
         anchors = db_session.query(BatchAnchor).all()
+        memberships = db_session.query(BatchAnchorReceipt).order_by(BatchAnchorReceipt.leaf_index).all()
         verifications = db_session.query(Verification).all()
 
         assert count == 2
         assert batch_root.startswith("0x")
         assert result["match"] is True
         assert result["receipt_count"] == 2
-        assert result["session_ids"] == ["run-db-0001", "run-db-0002"]
+        assert set(result["session_ids"]) == {"run-db-0001", "run-db-0002"}
         assert len(anchors) == 1
         assert anchors[0].batch_root == batch_root
+        assert len(memberships) == 2
+        assert [membership.leaf_index for membership in memberships] == [0, 1]
+        assert {membership.session_id for membership in memberships} == {"run-db-0001", "run-db-0002"}
         assert len(verifications) == 1
         assert verifications[0].match is True
 
@@ -162,6 +166,36 @@ def test_anchor_day_from_db_filters_by_prefix():
 
         assert count == 2
         assert db_session.query(BatchAnchor).one().receipt_count == 2
+        assert db_session.query(BatchAnchorReceipt).count() == 2
+
+
+def test_verify_day_from_db_uses_stored_anchor_membership_snapshot():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as db_session:
+        _persist_session(db_session, _session("run-snapshot-0001", 0.0, 2.0))
+        _persist_session(db_session, _session("run-snapshot-0002", 1.0, 4.0))
+        db_session.commit()
+
+        batch_root, _count = batch_anchoring.anchor_day_from_db(
+            "2026-03-07",
+            session_prefix="run-snapshot",
+            db_session=db_session,
+        )
+
+        receipt = db_session.get(Receipt, "run-snapshot-0001")
+        receipt.receipt_hash = "0x" + "f" * 64
+        db_session.commit()
+
+        result = verifier_batch.verify_day_from_db(
+            "2026-03-07",
+            session_prefix="run-snapshot",
+            db_session=db_session,
+        )
+
+        assert result["match"] is True
+        assert result["computed_root"] == batch_root
 
 
 def _persist_session(db_session: Session, session_payload: dict) -> None:

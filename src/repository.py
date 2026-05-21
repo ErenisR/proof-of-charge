@@ -4,7 +4,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from . import db
-from .models import BatchAnchor, ChargingSession, MeterValue, Receipt, Verification
+from .models import BatchAnchor, BatchAnchorReceipt, ChargingSession, MeterValue, Receipt, Verification
 
 
 def persist_finalized_session(
@@ -116,27 +116,39 @@ def persist_batch_anchor(
     day: str,
     batch_root: str,
     receipt_count: int,
+    receipt_memberships: list[Dict[str, Any]] | None = None,
     session_prefix: str | None = None,
     chain_tx: str | None = None,
     cid: str | None = None,
     db_session: Session | None = None,
-) -> None:
+) -> BatchAnchor:
     owns_session = db_session is None
     session = db_session or db.session_scope()
 
     try:
-        session.add(
-            BatchAnchor(
-                day=day,
-                session_prefix=session_prefix,
-                batch_root=batch_root,
-                receipt_count=receipt_count,
-                chain_tx=chain_tx,
-                cid=cid,
-            )
+        anchor = BatchAnchor(
+            day=day,
+            session_prefix=session_prefix,
+            batch_root=batch_root,
+            receipt_count=receipt_count,
+            chain_tx=chain_tx,
+            cid=cid,
         )
+        session.add(anchor)
+        session.flush()
+
+        for membership in receipt_memberships or []:
+            session.add(
+                BatchAnchorReceipt(
+                    anchor_id=anchor.id,
+                    session_id=membership["session_id"],
+                    receipt_hash=membership["receipt_hash"],
+                    leaf_index=int(membership["leaf_index"]),
+                )
+            )
         if owns_session:
             session.commit()
+        return anchor
     except Exception:
         if owns_session:
             session.rollback()
@@ -154,6 +166,9 @@ def persist_batch_verification(result: Dict[str, Any], db_session: Session | Non
         session.add(
             Verification(
                 day=result.get("day"),
+                session_id=result.get("session_id"),
+                expected_hash=result.get("expected_hash"),
+                computed_hash=result.get("computed_hash"),
                 expected_root=result.get("expected_root"),
                 computed_root=result.get("computed_root"),
                 match=bool(result.get("match")),

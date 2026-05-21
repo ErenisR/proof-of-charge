@@ -155,7 +155,7 @@ def anchor_day_from_db(
     session = db_session or db.session_scope()
 
     try:
-        receipt_hashes, _session_ids = _collect_receipt_hashes_from_db(
+        receipt_hashes, session_ids = _collect_receipt_hashes_from_db(
             session,
             day=day,
             session_prefix=session_prefix,
@@ -164,11 +164,13 @@ def anchor_day_from_db(
             raise ValueError(f"No receipts found for day {day}")
 
         batch_root = build_batch_root(receipt_hashes)
+        memberships = _build_anchor_memberships(session_ids, receipt_hashes)
         persist_batch_anchor(
             day=day,
             session_prefix=session_prefix,
             batch_root=batch_root,
             receipt_count=len(receipt_hashes),
+            receipt_memberships=memberships,
             db_session=session,
         )
         session.commit()
@@ -249,15 +251,34 @@ def _collect_receipt_hashes_from_db(
     day: str,
     session_prefix: str | None = None,
 ) -> Tuple[List[str], List[str]]:
-    receipt_hashes: List[str] = []
-    session_ids: List[str] = []
+    pairs: List[Tuple[str, str]] = []
     for receipt in _receipts_for_prefix(session, session_prefix=session_prefix):
         if _receipt_day_from_row(receipt) != day:
             continue
-        receipt_hashes.append(receipt.receipt_hash)
-        session_ids.append(receipt.session_id)
-    session_ids.sort()
-    return receipt_hashes, session_ids
+        pairs.append((receipt.session_id, receipt.receipt_hash))
+    pairs.sort(key=lambda pair: pair[0])
+    return [receipt_hash for _, receipt_hash in pairs], [session_id for session_id, _ in pairs]
+
+
+def _build_anchor_memberships(session_ids: List[str], receipt_hashes: List[str]) -> List[Dict[str, Any]]:
+    pairs = sorted(
+        zip(session_ids, receipt_hashes),
+        key=lambda pair: _normalized_hash(pair[1]),
+    )
+    return [
+        {
+            "session_id": session_id,
+            "receipt_hash": receipt_hash,
+            "leaf_index": index,
+        }
+        for index, (session_id, receipt_hash) in enumerate(pairs)
+    ]
+
+
+def _normalized_hash(receipt_hash: str) -> str:
+    if receipt_hash.startswith("0x"):
+        receipt_hash = receipt_hash[2:]
+    return receipt_hash.lower()
 
 
 def _receipts_for_prefix(session: Session, session_prefix: str | None = None) -> List[Receipt]:

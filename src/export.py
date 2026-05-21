@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from . import db
 from .batch_anchoring import ANCHORS_FILE, _receipt_day
-from .models import BatchAnchor, ChargingSession, MeterValue, Receipt, Verification
+from .models import BatchAnchor, BatchAnchorReceipt, ChargingSession, MeterValue, Receipt, Verification
 from .receipt_builder import hash_receipt
 from .storage import BASE_DIR, load_index
 
@@ -214,13 +214,18 @@ def export_all_from_db(db_session: Session, export_dir: Path = EXPORT_DIR) -> No
             select(BatchAnchor).order_by(BatchAnchor.day, BatchAnchor.id)
         )
     )
+    memberships = list(
+        db_session.scalars(
+            select(BatchAnchorReceipt).order_by(BatchAnchorReceipt.anchor_id, BatchAnchorReceipt.leaf_index)
+        )
+    )
     verifications = list(
         db_session.scalars(
             select(Verification).order_by(Verification.created_at, Verification.id)
         )
     )
 
-    anchor_by_receipt = _anchor_lookup(receipts, anchors)
+    anchor_by_receipt = _anchor_lookup(memberships, anchors)
 
     receipts_rows = []
     sessions_rows = []
@@ -312,38 +317,21 @@ def export_all_from_db(db_session: Session, export_dir: Path = EXPORT_DIR) -> No
     _write_csv(export_dir / "verifications.csv", verifications_rows, VERIFICATIONS_FIELDS)
 
 
-def _anchor_lookup(receipts: List[Receipt], anchors: List[BatchAnchor]) -> Dict[str, Dict[str, Any]]:
+def _anchor_lookup(
+    memberships: List[BatchAnchorReceipt],
+    anchors: List[BatchAnchor],
+) -> Dict[str, Dict[str, Any]]:
     lookup: Dict[str, Dict[str, Any]] = {}
-    anchors_by_day: Dict[str, List[BatchAnchor]] = {}
-    for anchor in anchors:
-        anchors_by_day.setdefault(anchor.day, []).append(anchor)
-
-    for receipt in receipts:
-        day = _day_from_ts(receipt.start_ts) or _day_from_ts(receipt.end_ts)
-        if not day:
+    anchors_by_id = {anchor.id: anchor for anchor in anchors}
+    for membership in memberships:
+        anchor = anchors_by_id.get(membership.anchor_id)
+        if not anchor:
             continue
-        candidates = anchors_by_day.get(day, [])
-        matched = _matching_anchor(receipt.session_id, candidates)
-        if matched:
-            lookup[receipt.session_id] = {
-                "batch_day": matched.day,
-                "batch_root": matched.batch_root,
-            }
+        lookup[membership.session_id] = {
+            "batch_day": anchor.day,
+            "batch_root": anchor.batch_root,
+        }
     return lookup
-
-
-def _matching_anchor(session_id: str, anchors: List[BatchAnchor]) -> BatchAnchor | None:
-    for anchor in reversed(anchors):
-        if anchor.session_prefix and not session_id.startswith(f"{anchor.session_prefix}-"):
-            continue
-        return anchor
-    return None
-
-
-def _day_from_ts(ts: str | None) -> str | None:
-    if not ts or len(ts) < 10:
-        return None
-    return ts[:10]
 
 
 def _isoformat(value: Any) -> str | None:

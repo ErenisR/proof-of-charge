@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from . import db
 from .batch_anchoring import ANCHORS_FILE, build_batch_root, _receipt_day
-from .models import BatchAnchor, Receipt
+from .models import BatchAnchor, BatchAnchorReceipt
 from .repository import persist_batch_verification
 from .storage import load_index
 
@@ -108,11 +108,12 @@ def verify_day_from_db(
             suffix = f" with prefix {session_prefix}" if session_prefix else ""
             raise ValueError(f"No anchor found for day {day}{suffix}")
 
-        receipt_hashes, session_ids = _collect_hashes_for_day_from_db(
+        receipt_hashes, session_ids = _collect_anchor_memberships_from_db(
             session,
-            day=day,
-            session_prefix=session_prefix,
+            anchor_id=anchor.id,
         )
+        if not receipt_hashes:
+            raise ValueError(f"No receipt memberships found for anchor {anchor.id}")
         computed_root = build_batch_root(receipt_hashes)
         expected_root = anchor.batch_root
         result = {
@@ -153,33 +154,20 @@ def _find_anchor_from_db(
     return None
 
 
-def _collect_hashes_for_day_from_db(
+def _collect_anchor_memberships_from_db(
     session: Session,
-    day: str,
-    session_prefix: str | None = None,
+    anchor_id: int,
 ) -> Tuple[List[str], List[str]]:
-    receipt_hashes: List[str] = []
-    session_ids: List[str] = []
-    for receipt in session.scalars(select(Receipt).order_by(Receipt.session_id)):
-        if session_prefix and not receipt.session_id.startswith(f"{session_prefix}-"):
-            continue
-        if _receipt_day_from_row(receipt) != day:
-            continue
-        receipt_hashes.append(receipt.receipt_hash)
-        session_ids.append(receipt.session_id)
-    session_ids.sort()
-    return receipt_hashes, session_ids
-
-
-def _receipt_day_from_row(receipt: Receipt) -> str | None:
-    receipt_json = receipt.receipt_json or {}
-    day = _receipt_day(receipt_json)
-    if day != "unknown":
-        return day
-    for ts in (receipt.start_ts, receipt.end_ts):
-        if ts:
-            return ts[:10]
-    return None
+    stmt = (
+        select(BatchAnchorReceipt)
+        .where(BatchAnchorReceipt.anchor_id == anchor_id)
+        .order_by(BatchAnchorReceipt.leaf_index)
+    )
+    memberships = list(session.scalars(stmt))
+    return (
+        [membership.receipt_hash for membership in memberships],
+        [membership.session_id for membership in memberships],
+    )
 
 
 if __name__ == "__main__":

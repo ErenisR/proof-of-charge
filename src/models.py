@@ -100,6 +100,29 @@ class BatchAnchor(Base):
     cid: Mapped[str | None] = mapped_column(Text)
     anchored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
+    receipts: Mapped[list["BatchAnchorReceipt"]] = relationship(
+        back_populates="anchor",
+        cascade="all, delete-orphan",
+        order_by="BatchAnchorReceipt.leaf_index",
+    )
+
+
+class BatchAnchorReceipt(Base):
+    __tablename__ = "batch_anchor_receipts"
+    __table_args__ = (
+        UniqueConstraint("anchor_id", "session_id", name="uq_batch_anchor_receipt_session"),
+        UniqueConstraint("anchor_id", "leaf_index", name="uq_batch_anchor_receipt_leaf"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    anchor_id: Mapped[int] = mapped_column(ForeignKey("batch_anchors.id"), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.session_id"), nullable=False, index=True)
+    receipt_hash: Mapped[str] = mapped_column(String(66), nullable=False, index=True)
+    leaf_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    anchor: Mapped[BatchAnchor] = relationship(back_populates="receipts")
+
 
 class Verification(Base):
     __tablename__ = "verifications"
