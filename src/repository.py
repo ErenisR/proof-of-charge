@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from sqlalchemy import delete, select
@@ -36,6 +37,10 @@ def _upsert_finalized_session(
     receipt_hash: str,
 ) -> None:
     session_id = session_payload["session_id"]
+    session_start = _parse_ts(session_payload["start_ts"])
+    session_end = _parse_ts(session_payload["end_ts"])
+    receipt_start = _parse_ts(receipt["start_ts"])
+    receipt_end = _parse_ts(receipt["end_ts"])
     existing_session = session.get(ChargingSession, session_id)
     if existing_session:
         charging_session = existing_session
@@ -44,8 +49,8 @@ def _upsert_finalized_session(
         charging_session.ocpp_tx_id = session_payload["ocpp_tx_id"]
         charging_session.schema_version = session_payload.get("schema_version") or receipt["schema_version"]
         charging_session.session_type = session_payload.get("session_type") or receipt["session_type"]
-        charging_session.start_ts = session_payload["start_ts"]
-        charging_session.end_ts = session_payload["end_ts"]
+        charging_session.start_ts = session_start
+        charging_session.end_ts = session_end
         charging_session.session_json = session_payload
     else:
         charging_session = ChargingSession(
@@ -55,8 +60,8 @@ def _upsert_finalized_session(
             ocpp_tx_id=session_payload["ocpp_tx_id"],
             schema_version=session_payload.get("schema_version") or receipt["schema_version"],
             session_type=session_payload.get("session_type") or receipt["session_type"],
-            start_ts=session_payload["start_ts"],
-            end_ts=session_payload["end_ts"],
+            start_ts=session_start,
+            end_ts=session_end,
             session_json=session_payload,
         )
         session.add(charging_session)
@@ -67,7 +72,7 @@ def _upsert_finalized_session(
             MeterValue(
                 session_id=session_id,
                 sample_index=index,
-                ts=meter_value["ts"],
+                ts=_parse_ts(meter_value["ts"]),
                 energy_kwh=_optional_float(meter_value.get("energy_kwh")),
                 import_kwh=_optional_float(meter_value.get("import_kwh")),
                 export_kwh=_optional_float(meter_value.get("export_kwh")),
@@ -86,8 +91,8 @@ def _upsert_finalized_session(
         db_receipt.import_kwh = float(energy_summary["import_kwh"])
         db_receipt.export_kwh = float(energy_summary["export_kwh"])
         db_receipt.net_kwh = float(energy_summary["net_kwh"])
-        db_receipt.start_ts = receipt["start_ts"]
-        db_receipt.end_ts = receipt["end_ts"]
+        db_receipt.start_ts = receipt_start
+        db_receipt.end_ts = receipt_end
         db_receipt.receipt_json = receipt
     else:
         session.add(
@@ -101,8 +106,8 @@ def _upsert_finalized_session(
                 import_kwh=float(energy_summary["import_kwh"]),
                 export_kwh=float(energy_summary["export_kwh"]),
                 net_kwh=float(energy_summary["net_kwh"]),
-                start_ts=receipt["start_ts"],
-                end_ts=receipt["end_ts"],
+                start_ts=receipt_start,
+                end_ts=receipt_end,
                 receipt_json=receipt,
             )
         )
@@ -124,11 +129,26 @@ def persist_batch_anchor(
 ) -> BatchAnchor:
     owns_session = db_session is None
     session = db_session or db.session_scope()
+    normalized_prefix = session_prefix or ""
 
     try:
+        existing_anchor = session.scalar(
+            select(BatchAnchor).where(
+                BatchAnchor.day == day,
+                BatchAnchor.session_prefix == normalized_prefix,
+                BatchAnchor.batch_root == batch_root,
+            )
+        )
+        if existing_anchor:
+            if receipt_memberships:
+                _ensure_anchor_memberships(session, existing_anchor, receipt_memberships)
+            if owns_session:
+                session.commit()
+            return existing_anchor
+
         anchor = BatchAnchor(
             day=day,
-            session_prefix=session_prefix,
+            session_prefix=normalized_prefix,
             batch_root=batch_root,
             receipt_count=receipt_count,
             chain_tx=chain_tx,
@@ -137,15 +157,7 @@ def persist_batch_anchor(
         session.add(anchor)
         session.flush()
 
-        for membership in receipt_memberships or []:
-            session.add(
-                BatchAnchorReceipt(
-                    anchor_id=anchor.id,
-                    session_id=membership["session_id"],
-                    receipt_hash=membership["receipt_hash"],
-                    leaf_index=int(membership["leaf_index"]),
-                )
-            )
+        _ensure_anchor_memberships(session, anchor, receipt_memberships or [])
         if owns_session:
             session.commit()
         return anchor
@@ -191,3 +203,41 @@ def _optional_float(value: Any) -> float | None:
     if value is None:
         return None
     return float(value)
+
+
+def _ensure_anchor_memberships(
+    session: Session,
+    anchor: BatchAnchor,
+    receipt_memberships: list[Dict[str, Any]],
+) -> None:
+    existing = {
+        membership.session_id
+        for membership in session.scalars(
+            select(BatchAnchorReceipt).where(BatchAnchorReceipt.anchor_id == anchor.id)
+        )
+    }
+    for membership in receipt_memberships:
+        if membership["session_id"] in existing:
+            continue
+        session.add(
+            BatchAnchorReceipt(
+                anchor_id=anchor.id,
+                session_id=membership["session_id"],
+                receipt_hash=membership["receipt_hash"],
+                leaf_index=int(membership["leaf_index"]),
+            )
+        )
+
+
+def _parse_ts(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        raw = value[:-1] + "+00:00" if value.endswith("Z") else value
+        parsed = datetime.fromisoformat(raw)
+    else:
+        raise ValueError(f"Invalid timestamp: {value}")
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

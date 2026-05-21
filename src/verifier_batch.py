@@ -141,17 +141,14 @@ def _find_anchor_from_db(
     day: str,
     session_prefix: str | None = None,
 ) -> BatchAnchor | None:
+    normalized_prefix = session_prefix or ""
     stmt = (
         select(BatchAnchor)
         .where(BatchAnchor.day == day)
+        .where(BatchAnchor.session_prefix == normalized_prefix)
         .order_by(BatchAnchor.id.desc())
     )
-    anchors = list(session.scalars(stmt))
-    for anchor in anchors:
-        if session_prefix and anchor.session_prefix != session_prefix:
-            continue
-        return anchor
-    return None
+    return session.scalar(stmt)
 
 
 def _collect_anchor_memberships_from_db(

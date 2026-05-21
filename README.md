@@ -196,8 +196,8 @@ erDiagram
     string ocpp_tx_id
     string schema_version
     string session_type
-    string start_ts
-    string end_ts
+    datetime start_ts
+    datetime end_ts
     json session_json
     datetime created_at
     datetime updated_at
@@ -207,7 +207,7 @@ erDiagram
     int id PK
     string session_id FK
     int sample_index
-    string ts
+    datetime ts
     float energy_kwh
     float import_kwh
     float export_kwh
@@ -223,8 +223,8 @@ erDiagram
     float import_kwh
     float export_kwh
     float net_kwh
-    string start_ts
-    string end_ts
+    datetime start_ts
+    datetime end_ts
     json receipt_json
     string cid
     string chain_tx
@@ -337,6 +337,9 @@ Anchoring is currently mocked: it computes and stores a Merkle batch root, but
 does not submit a real blockchain transaction yet. When `DATABASE_URL` is set,
 anchoring reads receipt hashes from Postgres and writes to `batch_anchors` plus
 `batch_anchor_receipts`.
+DB anchoring is idempotent for the same `day`, `session_prefix`, and
+`batch_root`: re-running the same command reuses the existing anchor instead of
+creating duplicate rows.
 Without `DATABASE_URL`, it falls back to `receipts/index.json`, writes to
 `receipts/anchors.json`, and updates the local receipt index with `batch_root`
 and `batch_day`.

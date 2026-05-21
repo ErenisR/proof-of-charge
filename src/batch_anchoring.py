@@ -300,7 +300,9 @@ def _receipt_day_from_row(receipt: Receipt) -> str | None:
         return day
     for ts in (receipt.start_ts, receipt.end_ts):
         if ts:
-            return ts[:10]
+            if hasattr(ts, "date"):
+                return ts.date().isoformat()
+            return str(ts)[:10]
     return None
 
 

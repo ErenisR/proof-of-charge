@@ -248,8 +248,8 @@ def export_all_from_db(db_session: Session, export_dir: Path = EXPORT_DIR) -> No
                 "export_kwh": receipt.export_kwh,
                 "net_kwh": receipt.net_kwh,
                 "schema_version": receipt.schema_version,
-                "start_ts": receipt.start_ts,
-                "end_ts": receipt.end_ts,
+                "start_ts": _isoformat(receipt.start_ts),
+                "end_ts": _isoformat(receipt.end_ts),
                 "batch_root": batch.get("batch_root"),
                 "batch_day": batch.get("batch_day"),
             }
@@ -262,8 +262,8 @@ def export_all_from_db(db_session: Session, export_dir: Path = EXPORT_DIR) -> No
                     "session_id": charging_session.session_id,
                     "user_id": charging_session.user_id,
                     "evse_id": charging_session.evse_id,
-                    "start_ts": charging_session.start_ts,
-                    "end_ts": charging_session.end_ts,
+                    "start_ts": _isoformat(charging_session.start_ts),
+                    "end_ts": _isoformat(charging_session.end_ts),
                     "session_type": charging_session.session_type,
                     "energy_kwh": receipt.energy_kwh,
                     "import_kwh": receipt.import_kwh,
@@ -276,7 +276,7 @@ def export_all_from_db(db_session: Session, export_dir: Path = EXPORT_DIR) -> No
     meter_rows = [
         {
             "session_id": mv.session_id,
-            "ts": mv.ts,
+            "ts": _isoformat(mv.ts),
             "energy_kwh": mv.energy_kwh,
             "import_kwh": mv.import_kwh,
             "export_kwh": mv.export_kwh,

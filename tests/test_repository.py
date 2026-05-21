@@ -1,7 +1,9 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from src.models import Base, BatchAnchor, BatchAnchorReceipt, MeterValue, Verification
+from src.models import Base, BatchAnchor, BatchAnchorReceipt, ChargingSession, MeterValue, Verification
 from src.receipt_builder import build_receipt, hash_receipt
 from src.receipt_schema import DEFAULT_SCHEMA_VERSION
 from src.repository import (
@@ -64,9 +66,16 @@ def test_persist_finalized_session_writes_session_receipt_and_meter_values():
         db_session.commit()
 
         stored_receipt = get_receipt_by_session_id("db-session-001", db_session)
+        stored_session = db_session.get(ChargingSession, "db-session-001")
+        first_meter_value = db_session.query(MeterValue).filter_by(session_id="db-session-001", sample_index=0).one()
         meter_count = db_session.query(MeterValue).filter_by(session_id="db-session-001").count()
 
         assert stored_receipt is not None
+        assert stored_session is not None
+        assert isinstance(stored_session.start_ts, datetime)
+        assert stored_session.start_ts.replace(tzinfo=timezone.utc) == datetime(2026, 3, 7, 10, 0, tzinfo=timezone.utc)
+        assert isinstance(stored_receipt.start_ts, datetime)
+        assert isinstance(first_meter_value.ts, datetime)
         assert stored_receipt.receipt_hash == receipt_hash
         assert stored_receipt.merkle_root == receipt["merkle_root"]
         assert stored_receipt.import_kwh == 2.5
@@ -140,3 +149,41 @@ def test_persist_batch_anchor_and_verification():
         assert verification.verification_type == "batch"
         assert verification.match is True
         assert verification.details_json["receipt_count"] == 2
+
+
+def test_persist_batch_anchor_returns_existing_anchor_for_duplicate_identity():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as db_session:
+        session_payload = _session()
+        receipt = build_receipt(session_payload)
+        receipt_hash = hash_receipt(receipt)
+        persist_finalized_session(session_payload, receipt, receipt_hash, db_session=db_session)
+
+        first_anchor = persist_batch_anchor(
+            day="2026-03-07",
+            session_prefix=None,
+            batch_root="0xabc",
+            receipt_count=1,
+            receipt_memberships=[
+                {"session_id": "db-session-001", "receipt_hash": receipt_hash, "leaf_index": 0}
+            ],
+            db_session=db_session,
+        )
+        second_anchor = persist_batch_anchor(
+            day="2026-03-07",
+            session_prefix=None,
+            batch_root="0xabc",
+            receipt_count=1,
+            receipt_memberships=[
+                {"session_id": "db-session-001", "receipt_hash": receipt_hash, "leaf_index": 0}
+            ],
+            db_session=db_session,
+        )
+        db_session.commit()
+
+        assert second_anchor.id == first_anchor.id
+        assert second_anchor.session_prefix == ""
+        assert db_session.query(BatchAnchor).count() == 1
+        assert db_session.query(BatchAnchorReceipt).count() == 1

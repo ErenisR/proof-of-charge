@@ -169,6 +169,32 @@ def test_anchor_day_from_db_filters_by_prefix():
         assert db_session.query(BatchAnchorReceipt).count() == 2
 
 
+def test_anchor_day_from_db_is_idempotent_for_same_batch():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as db_session:
+        _persist_session(db_session, _session("run-idempotent-0001", 0.0, 2.0))
+        _persist_session(db_session, _session("run-idempotent-0002", 0.0, 3.0))
+        db_session.commit()
+
+        first_root, first_count = batch_anchoring.anchor_day_from_db(
+            "2026-03-07",
+            session_prefix="run-idempotent",
+            db_session=db_session,
+        )
+        second_root, second_count = batch_anchoring.anchor_day_from_db(
+            "2026-03-07",
+            session_prefix="run-idempotent",
+            db_session=db_session,
+        )
+
+        assert second_root == first_root
+        assert second_count == first_count == 2
+        assert db_session.query(BatchAnchor).count() == 1
+        assert db_session.query(BatchAnchorReceipt).count() == 2
+
+
 def test_verify_day_from_db_uses_stored_anchor_membership_snapshot():
     engine = create_engine("sqlite:///:memory:", future=True)
     Base.metadata.create_all(engine)
