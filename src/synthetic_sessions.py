@@ -11,10 +11,11 @@ from typing import List, Dict, Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .receipt_schema import DEFAULT_SCHEMA_VERSION, SESSION_TYPE_ORDER, SESSION_TYPES
+
 API_URL = "http://127.0.0.1:8000/v1/receipts/finalize"
 
 USERS: List[str] = [f"user-{i:03d}" for i in range(1, 11)]
-SESSION_TYPES = ("charge_only", "discharge_only", "bidirectional")
 
 
 def _resolve_session_type(
@@ -25,7 +26,7 @@ def _resolve_session_type(
     discharge_ratio: float = 0.15,
 ) -> str:
     if session_mode == "all":
-        return SESSION_TYPES[(i - 1) % len(SESSION_TYPES)]
+        return SESSION_TYPE_ORDER[(i - 1) % len(SESSION_TYPE_ORDER)]
 
     if session_mode in SESSION_TYPES:
         return session_mode
@@ -179,7 +180,7 @@ def generate_session(
     net_amount = round(gross_import_cost - gross_export_credit, 3)
 
     session = {
-        "schema_version": "v2g-v1",
+        "schema_version": DEFAULT_SCHEMA_VERSION,
         "session_id": session_id,
         "user_id": user_id,
         "evse_id": evse_id,
@@ -284,7 +285,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--session-type",
         default="auto",
-        choices=["auto", "all", "charge_only", "discharge_only", "bidirectional"],
+        choices=["auto", "all", *SESSION_TYPE_ORDER],
         help="Session type mode. `all` cycles through charge/discharge/bidirectional.",
     )
     parser.add_argument(

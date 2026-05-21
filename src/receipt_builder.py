@@ -7,6 +7,7 @@ from .merkle import merkle_root
 from .receipt_schema import (
     DEFAULT_SCHEMA_VERSION,
     RECEIPT_FORMAT_VERSION,
+    SESSION_TYPES,
     validate_receipt_model,
 )
 
@@ -116,7 +117,7 @@ def _sum_weighted_cost(start_ts: str, end_ts: str, energy_kwh: float, components
 
 
 def _derive_session_type(session_type: str | None, import_kwh: float, export_kwh: float) -> str:
-    if session_type in {"charge_only", "discharge_only", "bidirectional"}:
+    if session_type in SESSION_TYPES:
         return session_type
     if import_kwh > 0 and export_kwh > 0:
         return "bidirectional"

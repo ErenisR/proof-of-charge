@@ -7,11 +7,6 @@ from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import Base
-
-DEFAULT_DATABASE_URL = "postgresql+psycopg://proof:proof@localhost:5432/proof_of_charge"
-
-
 def database_url() -> str | None:
     return os.getenv("DATABASE_URL")
 
@@ -33,11 +28,9 @@ def get_session_factory():
     return sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False, future=True)
 
 
-def create_db_schema() -> None:
-    Base.metadata.create_all(get_engine())
-
-
 def drop_db_schema() -> None:
+    from .models import Base
+
     Base.metadata.drop_all(get_engine())
 
 
@@ -54,12 +47,9 @@ if __name__ == "__main__":
     if cli_command == "init":
         run_migrations()
         print("[OK] Database schema migrated to head")
-    elif cli_command == "create-all":
-        create_db_schema()
-        print("[OK] Database schema created from SQLAlchemy metadata")
     elif cli_command == "drop":
         drop_db_schema()
         print("[OK] Database schema dropped")
     else:
-        print("Usage: python3 -m src.db [init|create-all|drop]")
+        print("Usage: python3 -m src.db [init|drop]")
         sys.exit(1)

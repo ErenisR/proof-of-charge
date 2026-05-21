@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Dict, List
 from . import db
 from .receipt_builder import build_receipt, hash_receipt
+from .receipt_schema import DEFAULT_SCHEMA_VERSION, DEFAULT_SESSION_TYPE
 from .repository import persist_finalized_session
 from .storage import save_receipt
 
@@ -23,9 +24,9 @@ class PricingComponent(BaseModel):
 class Pricing(BaseModel):
     currency: str = "EUR"
     model: str = "TOU"
-    components: List[PricingComponent] = []
-    import_components: List[PricingComponent] = []
-    export_components: List[PricingComponent] = []
+    components: List[PricingComponent] = Field(default_factory=list)
+    import_components: List[PricingComponent] = Field(default_factory=list)
+    export_components: List[PricingComponent] = Field(default_factory=list)
 
 class SessionInput(BaseModel):
     session_id: str
@@ -34,8 +35,8 @@ class SessionInput(BaseModel):
     ocpp_tx_id: str
     start_ts: str
     end_ts: str
-    schema_version: str | None = "v2g-v1"
-    session_type: str | None = "charge_only"
+    schema_version: str | None = DEFAULT_SCHEMA_VERSION
+    session_type: str | None = DEFAULT_SESSION_TYPE
     energy_summary: Dict[str, Any] | None = None
     settlement: Dict[str, Any] | None = None
     meter_values: List[MeterValue]

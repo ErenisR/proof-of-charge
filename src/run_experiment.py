@@ -14,6 +14,7 @@ from . import db
 from .export import export_all
 from .repository import persist_finalized_session
 from .receipt_builder import build_receipt, hash_receipt
+from .receipt_schema import SESSION_TYPE_ORDER
 from .storage import BASE_DIR, RECEIPTS_DIR, load_index, save_receipt
 from .synthetic_sessions import _load_registry, generate_session
 from .verifier_batch import verify_day
@@ -463,7 +464,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--session-type",
         default="auto",
-        choices=["auto", "all", "charge_only", "discharge_only", "bidirectional"],
+        choices=["auto", "all", *SESSION_TYPE_ORDER],
         help="Session type mode. `all` cycles through charge/discharge/bidirectional.",
     )
     parser.add_argument(

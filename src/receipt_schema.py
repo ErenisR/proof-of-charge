@@ -3,7 +3,9 @@ from typing import Any, Dict
 RECEIPT_FORMAT_VERSION = "1.0"
 DEFAULT_SCHEMA_VERSION = "v2g-v1"
 
-SESSION_TYPES = {"charge_only", "discharge_only", "bidirectional"}
+DEFAULT_SESSION_TYPE = "charge_only"
+SESSION_TYPE_ORDER = ("charge_only", "discharge_only", "bidirectional")
+SESSION_TYPES = set(SESSION_TYPE_ORDER)
 
 REQUIRED_RECEIPT_FIELDS = {
     "version",

@@ -81,6 +81,15 @@ pip install -r requirements.txt
 The canonical receipt contract is defined in `src/receipt_schema.py` and applied
 by `src/receipt_builder.py` before a receipt is returned or hashed.
 
+The project has three intentionally separate data-model layers:
+
+- API input schema: Pydantic models in `src/main.py` validate request payloads
+  before receipt construction.
+- Canonical receipt schema: `src/receipt_schema.py` defines the receipt contract
+  and accounting invariants that are hashed and audited.
+- Persistence schema: SQLAlchemy models in `src/models.py` store queryable
+  normalized columns plus full JSON payloads for auditability.
+
 Required top-level receipt fields:
 
 - `version`
