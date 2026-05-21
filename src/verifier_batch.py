@@ -5,7 +5,13 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from . import db
 from .batch_anchoring import ANCHORS_FILE, build_batch_root, _receipt_day
+from .models import BatchAnchor, Receipt
+from .repository import persist_batch_verification
 from .storage import load_index
 
 
@@ -59,6 +65,16 @@ def _collect_hashes_for_day(
 
 
 def verify_day(day: str, session_prefix: str | None = None) -> Dict[str, Any]:
+    if db.database_enabled():
+        session = db.session_scope()
+        try:
+            return verify_day_from_db(day, session_prefix=session_prefix, db_session=session)
+        finally:
+            session.close()
+    return verify_day_from_files(day, session_prefix=session_prefix)
+
+
+def verify_day_from_files(day: str, session_prefix: str | None = None) -> Dict[str, Any]:
     anchor = _find_anchor(day, session_prefix=session_prefix)
     if not anchor:
         suffix = f" with prefix {session_prefix}" if session_prefix else ""
@@ -66,7 +82,7 @@ def verify_day(day: str, session_prefix: str | None = None) -> Dict[str, Any]:
     receipt_hashes, session_ids = _collect_hashes_for_day(day, session_prefix=session_prefix)
     computed_root = build_batch_root(receipt_hashes)
     expected_root = anchor.get("batch_root")
-    return {
+    result = {
         "day": day,
         "session_prefix": session_prefix,
         "expected_root": expected_root,
@@ -75,6 +91,95 @@ def verify_day(day: str, session_prefix: str | None = None) -> Dict[str, Any]:
         "receipt_count": len(receipt_hashes),
         "session_ids": session_ids,
     }
+    return result
+
+
+def verify_day_from_db(
+    day: str,
+    session_prefix: str | None = None,
+    db_session: Session | None = None,
+) -> Dict[str, Any]:
+    owns_session = db_session is None
+    session = db_session or db.session_scope()
+
+    try:
+        anchor = _find_anchor_from_db(session, day=day, session_prefix=session_prefix)
+        if not anchor:
+            suffix = f" with prefix {session_prefix}" if session_prefix else ""
+            raise ValueError(f"No anchor found for day {day}{suffix}")
+
+        receipt_hashes, session_ids = _collect_hashes_for_day_from_db(
+            session,
+            day=day,
+            session_prefix=session_prefix,
+        )
+        computed_root = build_batch_root(receipt_hashes)
+        expected_root = anchor.batch_root
+        result = {
+            "day": day,
+            "session_prefix": session_prefix,
+            "expected_root": expected_root,
+            "computed_root": computed_root,
+            "match": computed_root == expected_root,
+            "receipt_count": len(receipt_hashes),
+            "session_ids": session_ids,
+        }
+        persist_batch_verification(result, db_session=session)
+        session.commit()
+        return result
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        if owns_session:
+            session.close()
+
+
+def _find_anchor_from_db(
+    session: Session,
+    day: str,
+    session_prefix: str | None = None,
+) -> BatchAnchor | None:
+    stmt = (
+        select(BatchAnchor)
+        .where(BatchAnchor.day == day)
+        .order_by(BatchAnchor.id.desc())
+    )
+    anchors = list(session.scalars(stmt))
+    for anchor in anchors:
+        if session_prefix and anchor.session_prefix != session_prefix:
+            continue
+        return anchor
+    return None
+
+
+def _collect_hashes_for_day_from_db(
+    session: Session,
+    day: str,
+    session_prefix: str | None = None,
+) -> Tuple[List[str], List[str]]:
+    receipt_hashes: List[str] = []
+    session_ids: List[str] = []
+    for receipt in session.scalars(select(Receipt).order_by(Receipt.session_id)):
+        if session_prefix and not receipt.session_id.startswith(f"{session_prefix}-"):
+            continue
+        if _receipt_day_from_row(receipt) != day:
+            continue
+        receipt_hashes.append(receipt.receipt_hash)
+        session_ids.append(receipt.session_id)
+    session_ids.sort()
+    return receipt_hashes, session_ids
+
+
+def _receipt_day_from_row(receipt: Receipt) -> str | None:
+    receipt_json = receipt.receipt_json or {}
+    day = _receipt_day(receipt_json)
+    if day != "unknown":
+        return day
+    for ts in (receipt.start_ts, receipt.end_ts):
+        if ts:
+            return ts[:10]
+    return None
 
 
 if __name__ == "__main__":

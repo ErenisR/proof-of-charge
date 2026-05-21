@@ -4,6 +4,11 @@ import hashlib
 from datetime import datetime
 from typing import Dict, Any, List
 from .merkle import merkle_root
+from .receipt_schema import (
+    DEFAULT_SCHEMA_VERSION,
+    RECEIPT_FORMAT_VERSION,
+    validate_receipt_model,
+)
 
 
 def _to_float(value: Any, field_name: str) -> float:
@@ -153,8 +158,8 @@ def build_receipt(session: Dict[str, Any]) -> Dict[str, Any]:
     net_amount = round(gross_import_cost - gross_export_credit, 3)
 
     receipt = {
-        "version": "1.0",
-        "schema_version": session.get("schema_version", "v1"),
+        "version": RECEIPT_FORMAT_VERSION,
+        "schema_version": session.get("schema_version", DEFAULT_SCHEMA_VERSION),
         "session_type": _derive_session_type(session.get("session_type"), import_kwh, export_kwh),
         "session_id": session["session_id"],
         "user_id": session["user_id"],
@@ -184,6 +189,7 @@ def build_receipt(session: Dict[str, Any]) -> Dict[str, Any]:
         "merkle_root": "0x" + root.hex(),
         "stream_hash_alg": "sha256",
     }
+    validate_receipt_model(receipt)
     return receipt
 
 

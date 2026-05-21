@@ -2,7 +2,9 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Any, Dict, List
+from . import db
 from .receipt_builder import build_receipt, hash_receipt
+from .repository import persist_finalized_session
 from .storage import save_receipt
 
 app = FastAPI(title="Proof-of-Charge MVP")
@@ -47,10 +49,12 @@ def finalize_session(session: SessionInput):
         receipt_hash = hash_receipt(receipt)
         
         save_receipt(session.session_id, receipt, receipt_hash, session_dict)
+        if db.database_enabled():
+            persist_finalized_session(session_dict, receipt, receipt_hash)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Later: store to DB, send to IPFS, anchor on-chain
+    # Later: send to IPFS and anchor on-chain.
     return {
         "receipt": receipt,
         "hash": receipt_hash

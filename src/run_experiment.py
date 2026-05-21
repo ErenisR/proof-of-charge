@@ -10,7 +10,9 @@ from typing import Any, Dict, Iterable, List
 
 from .batch_anchoring import anchor_day
 from .charts import generate_charts
+from . import db
 from .export import export_all
+from .repository import persist_finalized_session
 from .receipt_builder import build_receipt, hash_receipt
 from .storage import BASE_DIR, RECEIPTS_DIR, load_index, save_receipt
 from .synthetic_sessions import _load_registry, generate_session
@@ -208,6 +210,8 @@ def _finalize_synthetic_sessions(
         receipt = build_receipt(session)
         receipt_hash = hash_receipt(receipt)
         save_receipt(session["session_id"], receipt, receipt_hash, session)
+        if db.database_enabled():
+            persist_finalized_session(session, receipt, receipt_hash)
         session_ids.append(session["session_id"])
     t1 = time.perf_counter()
 

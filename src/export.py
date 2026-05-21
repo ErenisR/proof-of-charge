@@ -4,11 +4,51 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from . import db
 from .batch_anchoring import ANCHORS_FILE, _receipt_day
+from .models import BatchAnchor, ChargingSession, MeterValue, Receipt, Verification
 from .receipt_builder import hash_receipt
 from .storage import BASE_DIR, load_index
 
 EXPORT_DIR = BASE_DIR / "exports"
+
+RECEIPTS_FIELDS = [
+    "session_id",
+    "user_id",
+    "receipt_hash",
+    "merkle_root",
+    "pricing_model",
+    "energy_kwh",
+    "import_kwh",
+    "export_kwh",
+    "net_kwh",
+    "schema_version",
+    "start_ts",
+    "end_ts",
+    "batch_root",
+    "batch_day",
+]
+
+SESSIONS_FIELDS = [
+    "session_id",
+    "user_id",
+    "evse_id",
+    "start_ts",
+    "end_ts",
+    "session_type",
+    "energy_kwh",
+    "import_kwh",
+    "export_kwh",
+    "net_kwh",
+    "tariff_model",
+]
+
+METER_VALUES_FIELDS = ["session_id", "ts", "energy_kwh", "import_kwh", "export_kwh"]
+ANCHORS_FIELDS = ["day", "batch_root", "receipt_count", "chain_tx", "cid", "anchored_at"]
+VERIFICATIONS_FIELDS = ["session_id", "expected_hash", "computed_hash", "match", "batch_root", "batch_day"]
 
 
 def _load_receipt_payload(path: Path) -> Dict[str, Any]:
@@ -31,7 +71,18 @@ def _write_csv(path: Path, rows: List[Dict[str, Any]], fieldnames: List[str]) ->
             writer.writerow({k: row.get(k, "") for k in fieldnames})
 
 
-def export_all() -> None:
+def export_all(export_dir: Path = EXPORT_DIR) -> None:
+    if db.database_enabled():
+        session = db.session_scope()
+        try:
+            export_all_from_db(session, export_dir=export_dir)
+        finally:
+            session.close()
+        return
+    export_all_from_files(export_dir=export_dir)
+
+
+def export_all_from_files(export_dir: Path = EXPORT_DIR) -> None:
     index = load_index()
     receipts_rows = []
     sessions_rows = []
@@ -121,57 +172,186 @@ def export_all() -> None:
         )
 
     _write_csv(
-        EXPORT_DIR / "receipts.csv",
+        export_dir / "receipts.csv",
         receipts_rows,
-        [
-            "session_id",
-            "user_id",
-            "receipt_hash",
-            "merkle_root",
-            "pricing_model",
-            "energy_kwh",
-            "import_kwh",
-            "export_kwh",
-            "net_kwh",
-            "schema_version",
-            "start_ts",
-            "end_ts",
-            "batch_root",
-            "batch_day",
-        ],
+        RECEIPTS_FIELDS,
     )
     _write_csv(
-        EXPORT_DIR / "sessions.csv",
+        export_dir / "sessions.csv",
         sessions_rows,
-        [
-            "session_id",
-            "user_id",
-            "evse_id",
-            "start_ts",
-            "end_ts",
-            "session_type",
-            "energy_kwh",
-            "import_kwh",
-            "export_kwh",
-            "net_kwh",
-            "tariff_model",
-        ],
+        SESSIONS_FIELDS,
     )
     _write_csv(
-        EXPORT_DIR / "meter_values.csv",
+        export_dir / "meter_values.csv",
         meter_rows,
-        ["session_id", "ts", "energy_kwh", "import_kwh", "export_kwh"],
+        METER_VALUES_FIELDS,
     )
     _write_csv(
-        EXPORT_DIR / "anchors.csv",
+        export_dir / "anchors.csv",
         anchors_rows,
-        ["day", "batch_root", "receipt_count", "chain_tx", "cid", "anchored_at"],
+        ANCHORS_FIELDS,
     )
     _write_csv(
-        EXPORT_DIR / "verifications.csv",
+        export_dir / "verifications.csv",
         verifications_rows,
-        ["session_id", "expected_hash", "computed_hash", "match", "batch_root", "batch_day"],
+        VERIFICATIONS_FIELDS,
     )
+
+
+def export_all_from_db(db_session: Session, export_dir: Path = EXPORT_DIR) -> None:
+    sessions = {
+        row.session_id: row
+        for row in db_session.scalars(select(ChargingSession).order_by(ChargingSession.session_id))
+    }
+    receipts = list(db_session.scalars(select(Receipt).order_by(Receipt.session_id)))
+    meter_values = list(
+        db_session.scalars(
+            select(MeterValue).order_by(MeterValue.session_id, MeterValue.sample_index)
+        )
+    )
+    anchors = list(
+        db_session.scalars(
+            select(BatchAnchor).order_by(BatchAnchor.day, BatchAnchor.id)
+        )
+    )
+    verifications = list(
+        db_session.scalars(
+            select(Verification).order_by(Verification.created_at, Verification.id)
+        )
+    )
+
+    anchor_by_receipt = _anchor_lookup(receipts, anchors)
+
+    receipts_rows = []
+    sessions_rows = []
+    for receipt in receipts:
+        charging_session = sessions.get(receipt.session_id)
+        batch = anchor_by_receipt.get(receipt.session_id, {})
+        receipt_json = receipt.receipt_json or {}
+        pricing = receipt_json.get("pricing") or {}
+        session_json = charging_session.session_json if charging_session else {}
+
+        receipts_rows.append(
+            {
+                "session_id": receipt.session_id,
+                "user_id": receipt_json.get("user_id") or (charging_session.user_id if charging_session else None),
+                "receipt_hash": receipt.receipt_hash,
+                "merkle_root": receipt.merkle_root,
+                "pricing_model": pricing.get("model"),
+                "energy_kwh": receipt.energy_kwh,
+                "import_kwh": receipt.import_kwh,
+                "export_kwh": receipt.export_kwh,
+                "net_kwh": receipt.net_kwh,
+                "schema_version": receipt.schema_version,
+                "start_ts": receipt.start_ts,
+                "end_ts": receipt.end_ts,
+                "batch_root": batch.get("batch_root"),
+                "batch_day": batch.get("batch_day"),
+            }
+        )
+
+        if charging_session:
+            session_pricing = (session_json.get("pricing") or {})
+            sessions_rows.append(
+                {
+                    "session_id": charging_session.session_id,
+                    "user_id": charging_session.user_id,
+                    "evse_id": charging_session.evse_id,
+                    "start_ts": charging_session.start_ts,
+                    "end_ts": charging_session.end_ts,
+                    "session_type": charging_session.session_type,
+                    "energy_kwh": receipt.energy_kwh,
+                    "import_kwh": receipt.import_kwh,
+                    "export_kwh": receipt.export_kwh,
+                    "net_kwh": receipt.net_kwh,
+                    "tariff_model": session_pricing.get("model"),
+                }
+            )
+
+    meter_rows = [
+        {
+            "session_id": mv.session_id,
+            "ts": mv.ts,
+            "energy_kwh": mv.energy_kwh,
+            "import_kwh": mv.import_kwh,
+            "export_kwh": mv.export_kwh,
+        }
+        for mv in meter_values
+    ]
+
+    anchors_rows = [
+        {
+            "day": anchor.day,
+            "batch_root": anchor.batch_root,
+            "receipt_count": anchor.receipt_count,
+            "chain_tx": anchor.chain_tx,
+            "cid": anchor.cid,
+            "anchored_at": _isoformat(anchor.anchored_at),
+        }
+        for anchor in anchors
+    ]
+
+    verifications_rows = []
+    for verification in verifications:
+        details = verification.details_json or {}
+        verifications_rows.append(
+            {
+                "session_id": verification.session_id,
+                "expected_hash": verification.expected_hash,
+                "computed_hash": verification.computed_hash,
+                "match": str(verification.match),
+                "batch_root": verification.expected_root or details.get("expected_root"),
+                "batch_day": verification.day or details.get("day"),
+            }
+        )
+
+    _write_csv(export_dir / "receipts.csv", receipts_rows, RECEIPTS_FIELDS)
+    _write_csv(export_dir / "sessions.csv", sessions_rows, SESSIONS_FIELDS)
+    _write_csv(export_dir / "meter_values.csv", meter_rows, METER_VALUES_FIELDS)
+    _write_csv(export_dir / "anchors.csv", anchors_rows, ANCHORS_FIELDS)
+    _write_csv(export_dir / "verifications.csv", verifications_rows, VERIFICATIONS_FIELDS)
+
+
+def _anchor_lookup(receipts: List[Receipt], anchors: List[BatchAnchor]) -> Dict[str, Dict[str, Any]]:
+    lookup: Dict[str, Dict[str, Any]] = {}
+    anchors_by_day: Dict[str, List[BatchAnchor]] = {}
+    for anchor in anchors:
+        anchors_by_day.setdefault(anchor.day, []).append(anchor)
+
+    for receipt in receipts:
+        day = _day_from_ts(receipt.start_ts) or _day_from_ts(receipt.end_ts)
+        if not day:
+            continue
+        candidates = anchors_by_day.get(day, [])
+        matched = _matching_anchor(receipt.session_id, candidates)
+        if matched:
+            lookup[receipt.session_id] = {
+                "batch_day": matched.day,
+                "batch_root": matched.batch_root,
+            }
+    return lookup
+
+
+def _matching_anchor(session_id: str, anchors: List[BatchAnchor]) -> BatchAnchor | None:
+    for anchor in reversed(anchors):
+        if anchor.session_prefix and not session_id.startswith(f"{anchor.session_prefix}-"):
+            continue
+        return anchor
+    return None
+
+
+def _day_from_ts(ts: str | None) -> str | None:
+    if not ts or len(ts) < 10:
+        return None
+    return ts[:10]
+
+
+def _isoformat(value: Any) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
 
 
 if __name__ == "__main__":
