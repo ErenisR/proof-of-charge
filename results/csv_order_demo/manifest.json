@@ -1,0 +1,35 @@
+{
+  "config": {
+    "bidirectional_ratio": 0.3,
+    "day": "2026-05-22",
+    "discharge_ratio": 0.15,
+    "num_sessions": 1,
+    "registry_path": null,
+    "seed": 43,
+    "session_type": "auto",
+    "skip_figures": true
+  },
+  "created_at_utc": "2026-05-21T22:35:14.068482Z",
+  "metrics": {
+    "batch_root": "0xdafcec5c7821d235e5092fd48b676648d49def6403dac59628d4bcdbf8b398f5",
+    "batch_root_match": true,
+    "datasets": {
+      "meter_values": 7,
+      "receipts": 1,
+      "sessions": 1,
+      "verifications": 1
+    },
+    "day": "2026-05-22",
+    "num_sessions_anchored": 1,
+    "num_sessions_requested": 1,
+    "receipt_count_verified": 1,
+    "run_id": "csv_order_demo",
+    "seed": 43,
+    "t_finalize_avg_sec": 0.012247,
+    "t_finalize_total_sec": 0.012247
+  },
+  "run_id": "csv_order_demo",
+  "session_ids": [
+    "csv_order_demo-0001"
+  ]
+}

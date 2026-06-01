@@ -18,8 +18,6 @@ EXPORT_DIR = BASE_DIR / "exports"
 RECEIPTS_FIELDS = [
     "session_id",
     "user_id",
-    "receipt_hash",
-    "merkle_root",
     "pricing_model",
     "energy_kwh",
     "import_kwh",
@@ -28,8 +26,10 @@ RECEIPTS_FIELDS = [
     "schema_version",
     "start_ts",
     "end_ts",
-    "batch_root",
     "batch_day",
+    "receipt_hash",
+    "merkle_root",
+    "batch_root",
 ]
 
 SESSIONS_FIELDS = [
@@ -47,8 +47,8 @@ SESSIONS_FIELDS = [
 ]
 
 METER_VALUES_FIELDS = ["session_id", "ts", "energy_kwh", "import_kwh", "export_kwh"]
-ANCHORS_FIELDS = ["day", "batch_root", "receipt_count", "chain_tx", "cid", "anchored_at"]
-VERIFICATIONS_FIELDS = ["session_id", "expected_hash", "computed_hash", "match", "batch_root", "batch_day"]
+ANCHORS_FIELDS = ["day", "receipt_count", "anchored_at", "chain_tx", "cid", "batch_root"]
+VERIFICATIONS_FIELDS = ["session_id", "match", "batch_day", "expected_hash", "computed_hash", "batch_root"]
 
 
 def _load_receipt_payload(path: Path) -> Dict[str, Any]:

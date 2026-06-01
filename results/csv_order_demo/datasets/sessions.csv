@@ -1,0 +1,2 @@
+session_id,user_id,evse_id,start_ts,end_ts,session_type,tariff_model
+csv_order_demo-0001,user-001,EVSE-040,2026-05-22T17:07:02.326822Z,2026-05-22T17:37:02.326822Z,discharge_only,TOU

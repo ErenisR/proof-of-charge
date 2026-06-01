@@ -1,0 +1,18 @@
+{
+  "batch_root": "0x4ced300f57c4b8b4a9a8eb3b579c5f025e31f83e9f296c785e021d049bf1c6bf",
+  "batch_root_match": true,
+  "datasets": {
+    "meter_values": 993,
+    "receipts": 100,
+    "sessions": 100,
+    "verifications": 100
+  },
+  "day": "2026-05-21",
+  "num_sessions_anchored": 100,
+  "num_sessions_requested": 100,
+  "receipt_count_verified": 100,
+  "run_id": "research_20260521_100_v3",
+  "seed": 42,
+  "t_finalize_avg_sec": 0.00573,
+  "t_finalize_total_sec": 0.573
+}

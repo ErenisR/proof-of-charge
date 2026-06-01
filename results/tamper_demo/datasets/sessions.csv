@@ -1,0 +1,2 @@
+session_id,user_id,evse_id,start_ts,end_ts,session_type,tariff_model
+tamper_demo-0001,user-002,EVSE-046,2026-05-23T23:22:59.070749Z,2026-05-24T00:02:59.070749Z,bidirectional,TOU

@@ -1,0 +1,18 @@
+{
+  "batch_root": "0x7d73b1b66701d681e4fb73bee18ed7af3a54f14ab4db029649895eed9866f311",
+  "batch_root_match": true,
+  "datasets": {
+    "meter_values": 9,
+    "receipts": 1,
+    "sessions": 1,
+    "verifications": 1
+  },
+  "day": "2026-05-23",
+  "num_sessions_anchored": 1,
+  "num_sessions_requested": 1,
+  "receipt_count_verified": 1,
+  "run_id": "tamper_demo",
+  "seed": 42,
+  "t_finalize_avg_sec": 0.011332,
+  "t_finalize_total_sec": 0.011332
+}

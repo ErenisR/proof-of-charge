@@ -1,0 +1,18 @@
+{
+  "batch_root": "0xdafcec5c7821d235e5092fd48b676648d49def6403dac59628d4bcdbf8b398f5",
+  "batch_root_match": true,
+  "datasets": {
+    "meter_values": 7,
+    "receipts": 1,
+    "sessions": 1,
+    "verifications": 1
+  },
+  "day": "2026-05-22",
+  "num_sessions_anchored": 1,
+  "num_sessions_requested": 1,
+  "receipt_count_verified": 1,
+  "run_id": "csv_order_demo",
+  "seed": 43,
+  "t_finalize_avg_sec": 0.012247,
+  "t_finalize_total_sec": 0.012247
+}

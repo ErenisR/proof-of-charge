@@ -421,6 +421,12 @@ generate sessions -> build receipts -> save receipts -> anchor day ->
 verify batch -> export datasets -> generate figures -> snapshot results
 ```
 
+Skip figure generation for quick receipt/tamper demos:
+
+```bash
+python3 -m src.run_experiment 1 --day 2026-05-22 --seed 42 --run-id tamper_demo --skip-figures
+```
+
 Output is written to:
 
 ```text
@@ -428,7 +434,7 @@ results/<run_id>/
   manifest.json
   metrics.json
   datasets/*.csv
-  figures/*
+  figures/*          # only when figures are not skipped
 ```
 
 Example with explicit run ID:

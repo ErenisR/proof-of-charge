@@ -1,0 +1,2 @@
+session_id,user_id,energy_kwh,import_kwh,export_kwh,net_kwh,start_ts,end_ts,batch_day,receipt_hash,merkle_root,batch_root
+csv_order_demo-0001,user-001,-5.142,0.0,5.142,-5.142,2026-05-22T17:07:02.326822Z,2026-05-22T17:37:02.326822Z,2026-05-22,0x7051730cb505b171743173d3733e06896a8249755b3bb4000536cb0da19b0245,0x5ae2662d5f83eb09e6abb87a836a2ddcf56d1d5e75ba78011d3232bc24bb660d,0xdafcec5c7821d235e5092fd48b676648d49def6403dac59628d4bcdbf8b398f5

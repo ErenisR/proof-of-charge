@@ -1,0 +1,43 @@
+{
+  "config": {
+    "bidirectional_ratio": 0.3,
+    "day": "2026-05-21",
+    "discharge_ratio": 0.15,
+    "num_sessions": 10,
+    "registry_path": null,
+    "seed": 42,
+    "session_type": "auto"
+  },
+  "created_at_utc": "2026-05-21T21:46:36.911826Z",
+  "metrics": {
+    "batch_root": "0x6638a06da2a2f273455119ea606a5c45d682570b9c909be7196c7f0f5a5d9d05",
+    "batch_root_match": true,
+    "datasets": {
+      "meter_values": 91,
+      "receipts": 10,
+      "sessions": 10,
+      "verifications": 10
+    },
+    "day": "2026-05-21",
+    "num_sessions_anchored": 10,
+    "num_sessions_requested": 10,
+    "receipt_count_verified": 10,
+    "run_id": "research_20260521_smoke",
+    "seed": 42,
+    "t_finalize_avg_sec": 0.005734,
+    "t_finalize_total_sec": 0.057339
+  },
+  "run_id": "research_20260521_smoke",
+  "session_ids": [
+    "research_20260521_smoke-0001",
+    "research_20260521_smoke-0002",
+    "research_20260521_smoke-0003",
+    "research_20260521_smoke-0004",
+    "research_20260521_smoke-0005",
+    "research_20260521_smoke-0006",
+    "research_20260521_smoke-0007",
+    "research_20260521_smoke-0008",
+    "research_20260521_smoke-0009",
+    "research_20260521_smoke-0010"
+  ]
+}

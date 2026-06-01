@@ -301,8 +301,6 @@ def _build_run_exports(
         [
             "session_id",
             "user_id",
-            "receipt_hash",
-            "merkle_root",
             "energy_kwh",
             "import_kwh",
             "export_kwh",
@@ -310,6 +308,8 @@ def _build_run_exports(
             "start_ts",
             "end_ts",
             "batch_day",
+            "receipt_hash",
+            "merkle_root",
             "batch_root",
         ],
     )
@@ -328,8 +328,6 @@ def _build_run_exports(
         verify_rows,
         [
             "session_id",
-            "expected_hash",
-            "computed_hash",
             "match",
             "import_consistent",
             "export_consistent",
@@ -338,6 +336,8 @@ def _build_run_exports(
             "audit_ok",
             "audit_reason",
             "batch_day",
+            "expected_hash",
+            "computed_hash",
             "batch_root",
         ],
     )
@@ -351,7 +351,7 @@ def _build_run_exports(
                 "receipt_count": len(receipts_rows),
             }
         ],
-        ["day", "session_prefix", "batch_root", "receipt_count"],
+        ["day", "session_prefix", "receipt_count", "batch_root"],
     )
 
     return {
@@ -383,6 +383,7 @@ def run_experiment(
     session_type: str = "auto",
     bidirectional_ratio: float = 0.30,
     discharge_ratio: float = 0.15,
+    skip_figures: bool = False,
 ) -> Dict[str, Any]:
     run_id = run_id or _default_run_id()
     run_dir = RESULTS_DIR / run_id
@@ -402,10 +403,11 @@ def run_experiment(
     batch_root, anchored_count = anchor_day(day, session_prefix=run_id)
     verify = verify_day(day, session_prefix=run_id)
 
-    # Keep global exports up to date, then render run-scoped charts.
+    # Keep global exports up to date, then optionally render run-scoped charts.
     export_all()
-    generate_charts(session_prefix=run_id)
-    _copy_figures(run_dir)
+    if not skip_figures:
+        generate_charts(session_prefix=run_id)
+        _copy_figures(run_dir)
 
     dataset_counts = _build_run_exports(
         run_dir=run_dir,
@@ -439,6 +441,7 @@ def run_experiment(
                 "bidirectional_ratio": bidirectional_ratio,
                 "discharge_ratio": discharge_ratio,
                 "registry_path": str(registry_path) if registry_path else None,
+                "skip_figures": skip_figures,
             },
             "metrics": metrics,
             "session_ids": synth["session_ids"],
@@ -488,6 +491,11 @@ if __name__ == "__main__":
         type=Path,
         help="Optional EVSE registry CSV path to enrich synthetic sessions",
     )
+    parser.add_argument(
+        "--skip-figures",
+        action="store_true",
+        help="Skip chart generation and figure snapshot copying.",
+    )
     args = parser.parse_args()
 
     result = run_experiment(
@@ -499,5 +507,6 @@ if __name__ == "__main__":
         session_type=args.session_type,
         bidirectional_ratio=args.bidirectional_ratio,
         discharge_ratio=args.discharge_ratio,
+        skip_figures=args.skip_figures,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
