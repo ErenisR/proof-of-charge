@@ -1,18 +1,63 @@
 import os
 import sys
 from functools import lru_cache
+from pathlib import Path
 
 from alembic import command as alembic_command
 from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+ENV_FILE = ROOT_DIR / ".env"
+
+
+def _load_env_file() -> None:
+    if os.getenv("PROOF_OF_CHARGE_SKIP_DOTENV"):
+        return
+    if not ENV_FILE.exists():
+        return
+    for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file()
+
+
+def _truthy(value: str | None) -> bool:
+    return value is not None and value.lower() in {"1", "true", "yes", "on"}
+
+
 def database_url() -> str | None:
     return os.getenv("DATABASE_URL")
 
 
+def database_required() -> bool:
+    return _truthy(os.getenv("REQUIRE_DATABASE"))
+
+
 def database_enabled() -> bool:
-    return bool(database_url())
+    if database_url():
+        return True
+    if database_required():
+        raise RuntimeError(
+            "Database is required but DATABASE_URL is not set. "
+            "Start Postgres with `docker compose up -d postgres` and set DATABASE_URL."
+        )
+    return False
+
+
+def require_database() -> None:
+    if not database_url():
+        raise RuntimeError(
+            "DATABASE_URL is not set. Start Postgres with `docker compose up -d postgres` "
+            "and set DATABASE_URL."
+        )
 
 
 @lru_cache(maxsize=1)

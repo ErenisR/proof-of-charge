@@ -5,9 +5,11 @@ charging session data into deterministic receipts, hashes those receipts,
 groups them into daily Merkle batch anchors, verifies anchored batches, and
 exports datasets and figures for research or thesis material.
 
-The current implementation is local-first: receipts, indexes, anchors, exports,
-and experiment results are written to files in this repository. Blockchain
-transactions and IPFS CIDs are represented as placeholders for now.
+The current development workflow is database-backed: Postgres stores finalized
+sessions, receipts, batch anchors, batch memberships, verifications, and exported
+query data. Local receipt files are still written as a compatibility/audit
+artifact while the project is evolving. Blockchain transactions and IPFS CIDs
+are represented as placeholders for now.
 
 ## What It Does
 
@@ -145,9 +147,18 @@ saves it under `receipts/`, and returns the receipt plus its hash.
 
 ## Postgres Storage
 
-The project now includes a Postgres-ready persistence layer using SQLAlchemy.
-File-based receipt storage still works and remains enabled. Database writes are
-enabled when `DATABASE_URL` is set.
+The project includes a Postgres persistence layer using SQLAlchemy. The repo
+loads `.env` automatically during normal runtime. The local `.env` is configured
+with:
+
+```bash
+DATABASE_URL=postgresql+psycopg://proof:proof@localhost:5432/proof_of_charge
+REQUIRE_DATABASE=1
+```
+
+With `REQUIRE_DATABASE=1`, normal commands fail loudly if `DATABASE_URL` is
+missing. If Postgres is not running, DB-backed commands fail when they try to
+connect, which is intentional for development.
 
 Start Postgres locally:
 
@@ -155,10 +166,10 @@ Start Postgres locally:
 docker compose up -d postgres
 ```
 
-Set the database URL:
+If you need to recreate your local env file:
 
 ```bash
-export DATABASE_URL=postgresql+psycopg://proof:proof@localhost:5432/proof_of_charge
+cp .env.example .env
 ```
 
 Initialize the schema:
@@ -173,7 +184,7 @@ Then run the API normally:
 uvicorn src.main:app --reload
 ```
 
-With `DATABASE_URL` set, finalized sessions are written to both:
+With the default `.env`, finalized sessions are written to both:
 
 - local receipt JSON files under `receipts/`
 - Postgres tables through SQLAlchemy
@@ -343,15 +354,15 @@ python3 -m src.batch_anchoring 2026-03-07 --prefix run_20260307_223049
 ```
 
 Anchoring is currently mocked: it computes and stores a Merkle batch root, but
-does not submit a real blockchain transaction yet. When `DATABASE_URL` is set,
+does not submit a real blockchain transaction yet. With the default `.env`,
 anchoring reads receipt hashes from Postgres and writes to `batch_anchors` plus
 `batch_anchor_receipts`.
 DB anchoring is idempotent for the same `day`, `session_prefix`, and
 `batch_root`: re-running the same command reuses the existing anchor instead of
 creating duplicate rows.
-Without `DATABASE_URL`, it falls back to `receipts/index.json`, writes to
-`receipts/anchors.json`, and updates the local receipt index with `batch_root`
-and `batch_day`.
+If `REQUIRE_DATABASE` is disabled and `DATABASE_URL` is not set, it falls back
+to `receipts/index.json`, writes to `receipts/anchors.json`, and updates the
+local receipt index with `batch_root` and `batch_day`.
 
 ## Verify Receipts
 
@@ -373,10 +384,10 @@ Verify a specific run prefix:
 python3 -m src.verifier_batch 2026-03-07 --prefix run_20260307_223049
 ```
 
-Batch verification is DB-first when `DATABASE_URL` is set. It reads the latest
-matching anchor and receipt hashes from Postgres, recomputes the batch root, and
-writes the result to `verifications`. Without `DATABASE_URL`, it uses the local
-receipt files and `receipts/anchors.json`.
+Batch verification reads the latest matching anchor and receipt hashes from
+Postgres, recomputes the batch root, and writes the result to `verifications`.
+If `REQUIRE_DATABASE` is disabled and `DATABASE_URL` is not set, it uses the
+local receipt files and `receipts/anchors.json`.
 
 ## Export Datasets And Figures
 
@@ -386,8 +397,9 @@ Generate CSV exports:
 python3 -m src.export
 ```
 
-When `DATABASE_URL` is set, exports are generated from Postgres. Without
-`DATABASE_URL`, the command falls back to the local receipt JSON/index files.
+With the default `.env`, exports are generated from Postgres. If
+`REQUIRE_DATABASE` is disabled and `DATABASE_URL` is not set, the command falls
+back to the local receipt JSON/index files.
 
 Generate figures:
 
