@@ -8,14 +8,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from .batch_anchoring import anchor_day
 from .charts import generate_charts
 from . import db
 from .export import export_all
+from .models import BatchAnchor, BatchAnchorReceipt, ChargingSession, MeterValue, Receipt
 from .repository import persist_finalized_session
 from .receipt_builder import build_receipt, hash_receipt
 from .receipt_schema import SESSION_TYPE_ORDER
-from .storage import BASE_DIR, RECEIPTS_DIR, load_index, save_receipt
+from .storage import BASE_DIR, load_index, save_receipt, write_local_receipts_enabled
 from .synthetic_sessions import _load_registry, generate_session
 from .verifier_batch import verify_day
 
@@ -55,6 +59,14 @@ def _parse_ts(ts: str) -> datetime:
     if ts.endswith("Z"):
         ts = ts.replace("Z", "+00:00")
     return datetime.fromisoformat(ts)
+
+
+def _isoformat(value: Any) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
 
 
 def _coerce_components(pricing: Dict[str, Any], keys: list[str]) -> List[Dict[str, Any]]:
@@ -210,9 +222,11 @@ def _finalize_synthetic_sessions(
         )
         receipt = build_receipt(session)
         receipt_hash = hash_receipt(receipt)
-        save_receipt(session["session_id"], receipt, receipt_hash, session)
-        if db.database_enabled():
+        db_enabled = db.database_enabled()
+        if db_enabled:
             persist_finalized_session(session, receipt, receipt_hash)
+        if not db_enabled or write_local_receipts_enabled():
+            save_receipt(session["session_id"], receipt, receipt_hash, session)
         session_ids.append(session["session_id"])
     t1 = time.perf_counter()
 
@@ -224,6 +238,32 @@ def _finalize_synthetic_sessions(
 
 
 def _build_run_exports(
+    run_dir: Path,
+    session_prefix: str,
+    day: str,
+    batch_root: str,
+) -> Dict[str, int]:
+    if db.database_enabled():
+        session = db.session_scope()
+        try:
+            return _build_run_exports_from_db(
+                db_session=session,
+                run_dir=run_dir,
+                session_prefix=session_prefix,
+                day=day,
+                batch_root=batch_root,
+            )
+        finally:
+            session.close()
+    return _build_run_exports_from_files(
+        run_dir=run_dir,
+        session_prefix=session_prefix,
+        day=day,
+        batch_root=batch_root,
+    )
+
+
+def _build_run_exports_from_files(
     run_dir: Path,
     session_prefix: str,
     day: str,
@@ -359,6 +399,233 @@ def _build_run_exports(
         "meter_values": len(meter_rows),
         "receipts": len(receipts_rows),
         "verifications": len(verify_rows),
+    }
+
+
+def _build_run_exports_from_db(
+    db_session: Session,
+    run_dir: Path,
+    session_prefix: str,
+    day: str,
+    batch_root: str,
+) -> Dict[str, int]:
+    session_ids = _run_session_ids(db_session, session_prefix)
+    receipts = {
+        receipt.session_id: receipt
+        for receipt in db_session.scalars(
+            select(Receipt)
+            .where(Receipt.session_id.in_(session_ids))
+            .order_by(Receipt.session_id)
+        )
+    }
+    sessions = {
+        session.session_id: session
+        for session in db_session.scalars(
+            select(ChargingSession)
+            .where(ChargingSession.session_id.in_(session_ids))
+            .order_by(ChargingSession.session_id)
+        )
+    }
+    meter_values = list(
+        db_session.scalars(
+            select(MeterValue)
+            .where(MeterValue.session_id.in_(session_ids))
+            .order_by(MeterValue.session_id, MeterValue.sample_index)
+        )
+    )
+    anchor_lookup = _run_anchor_lookup(db_session, session_prefix)
+
+    receipts_rows: List[Dict[str, Any]] = []
+    sessions_rows: List[Dict[str, Any]] = []
+    meter_rows: List[Dict[str, Any]] = []
+    verify_rows: List[Dict[str, Any]] = []
+
+    for session_id in session_ids:
+        receipt_row = receipts.get(session_id)
+        session_row = sessions.get(session_id)
+        if not receipt_row or not session_row:
+            continue
+        receipt = receipt_row.receipt_json or {}
+        session_payload = session_row.session_json or {}
+        expected_hash = receipt_row.receipt_hash
+        computed_hash = hash_receipt(receipt)
+        anchor = anchor_lookup.get(session_id, {"batch_day": day, "batch_root": batch_root})
+
+        receipts_rows.append(
+            {
+                "session_id": session_id,
+                "user_id": receipt.get("user_id"),
+                "energy_kwh": receipt_row.energy_kwh,
+                "import_kwh": receipt_row.import_kwh,
+                "export_kwh": receipt_row.export_kwh,
+                "net_kwh": receipt_row.net_kwh,
+                "start_ts": _isoformat(receipt_row.start_ts),
+                "end_ts": _isoformat(receipt_row.end_ts),
+                "batch_day": anchor.get("batch_day"),
+                "receipt_hash": expected_hash,
+                "merkle_root": receipt_row.merkle_root,
+                "batch_root": anchor.get("batch_root"),
+            }
+        )
+        sessions_rows.append(
+            {
+                "session_id": session_id,
+                "user_id": session_row.user_id,
+                "evse_id": session_row.evse_id,
+                "start_ts": _isoformat(session_row.start_ts),
+                "end_ts": _isoformat(session_row.end_ts),
+                "session_type": session_row.session_type,
+                "tariff_model": (session_payload.get("pricing") or {}).get("model"),
+            }
+        )
+        audit = _session_audit(session_payload, receipt)
+        verify_rows.append(
+            {
+                "session_id": session_id,
+                "expected_hash": expected_hash,
+                "computed_hash": computed_hash,
+                **audit,
+                "match": str(expected_hash == computed_hash),
+                "batch_day": anchor.get("batch_day"),
+                "batch_root": anchor.get("batch_root"),
+            }
+        )
+
+    for mv in meter_values:
+        meter_rows.append(
+            {
+                "session_id": mv.session_id,
+                "ts": _isoformat(mv.ts),
+                "energy_kwh": mv.energy_kwh,
+                "import_kwh": mv.import_kwh,
+                "export_kwh": mv.export_kwh,
+            }
+        )
+
+    return _write_run_dataset_csvs(
+        run_dir=run_dir,
+        day=day,
+        session_prefix=session_prefix,
+        batch_root=batch_root,
+        receipts_rows=receipts_rows,
+        sessions_rows=sessions_rows,
+        meter_rows=meter_rows,
+        verify_rows=verify_rows,
+    )
+
+
+def _write_run_dataset_csvs(
+    run_dir: Path,
+    day: str,
+    session_prefix: str,
+    batch_root: str,
+    receipts_rows: List[Dict[str, Any]],
+    sessions_rows: List[Dict[str, Any]],
+    meter_rows: List[Dict[str, Any]],
+    verify_rows: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    _write_csv(
+        run_dir / "datasets" / "receipts.csv",
+        receipts_rows,
+        [
+            "session_id",
+            "user_id",
+            "energy_kwh",
+            "import_kwh",
+            "export_kwh",
+            "net_kwh",
+            "start_ts",
+            "end_ts",
+            "batch_day",
+            "receipt_hash",
+            "merkle_root",
+            "batch_root",
+        ],
+    )
+    _write_csv(
+        run_dir / "datasets" / "sessions.csv",
+        sessions_rows,
+        ["session_id", "user_id", "evse_id", "start_ts", "end_ts", "session_type", "tariff_model"],
+    )
+    _write_csv(
+        run_dir / "datasets" / "meter_values.csv",
+        meter_rows,
+        ["session_id", "ts", "energy_kwh", "import_kwh", "export_kwh"],
+    )
+    _write_csv(
+        run_dir / "datasets" / "verifications.csv",
+        verify_rows,
+        [
+            "session_id",
+            "match",
+            "import_consistent",
+            "export_consistent",
+            "net_consistent",
+            "settlement_consistent",
+            "audit_ok",
+            "audit_reason",
+            "batch_day",
+            "expected_hash",
+            "computed_hash",
+            "batch_root",
+        ],
+    )
+    _write_csv(
+        run_dir / "datasets" / "anchors.csv",
+        [
+            {
+                "day": day,
+                "session_prefix": session_prefix,
+                "batch_root": batch_root,
+                "receipt_count": len(receipts_rows),
+            }
+        ],
+        ["day", "session_prefix", "receipt_count", "batch_root"],
+    )
+
+    return {
+        "sessions": len(sessions_rows),
+        "meter_values": len(meter_rows),
+        "receipts": len(receipts_rows),
+        "verifications": len(verify_rows),
+    }
+
+
+def _run_session_ids(db_session: Session, session_prefix: str) -> List[str]:
+    return list(
+        db_session.scalars(
+            select(ChargingSession.session_id)
+            .where(ChargingSession.session_id.like(f"{session_prefix}-%"))
+            .order_by(ChargingSession.session_id)
+        )
+    )
+
+
+def _run_anchor_lookup(db_session: Session, session_prefix: str) -> Dict[str, Dict[str, str]]:
+    anchors = list(
+        db_session.scalars(
+            select(BatchAnchor)
+            .where(BatchAnchor.session_prefix == session_prefix)
+            .order_by(BatchAnchor.id)
+        )
+    )
+    if not anchors:
+        return {}
+    anchors_by_id = {anchor.id: anchor for anchor in anchors}
+    memberships = list(
+        db_session.scalars(
+            select(BatchAnchorReceipt)
+            .where(BatchAnchorReceipt.anchor_id.in_(anchors_by_id.keys()))
+            .order_by(BatchAnchorReceipt.anchor_id, BatchAnchorReceipt.leaf_index)
+        )
+    )
+    return {
+        membership.session_id: {
+            "batch_day": anchors_by_id[membership.anchor_id].day,
+            "batch_root": anchors_by_id[membership.anchor_id].batch_root,
+        }
+        for membership in memberships
+        if membership.anchor_id in anchors_by_id
     }
 
 

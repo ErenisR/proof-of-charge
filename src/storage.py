@@ -1,5 +1,6 @@
 # src/storage.py
 import json
+import os
 from pathlib import Path
 from typing import Dict, Any
 
@@ -8,6 +9,12 @@ RECEIPTS_DIR = BASE_DIR / "receipts"
 INDEX_FILE = RECEIPTS_DIR / "index.json"
 
 RECEIPTS_DIR.mkdir(exist_ok=True)
+
+
+def write_local_receipts_enabled() -> bool:
+    value = os.getenv("WRITE_LOCAL_RECEIPTS")
+    return value is not None and value.lower() in {"1", "true", "yes", "on"}
+
 
 def load_index() -> Dict[str, Any]:
     if not INDEX_FILE.exists():

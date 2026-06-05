@@ -199,6 +199,35 @@ def persist_batch_verification(result: Dict[str, Any], db_session: Session | Non
             session.close()
 
 
+def persist_receipt_verification(result: Dict[str, Any], db_session: Session | None = None) -> None:
+    owns_session = db_session is None
+    session = db_session or db.session_scope()
+
+    try:
+        session.add(
+            Verification(
+                day=result.get("day"),
+                session_id=result.get("session_id"),
+                expected_hash=result.get("expected_hash"),
+                computed_hash=result.get("computed_hash"),
+                expected_root=result.get("expected_root"),
+                computed_root=result.get("computed_root"),
+                match=bool(result.get("match")),
+                verification_type="receipt",
+                details_json=result,
+            )
+        )
+        if owns_session:
+            session.commit()
+    except Exception:
+        if owns_session:
+            session.rollback()
+        raise
+    finally:
+        if owns_session:
+            session.close()
+
+
 def _optional_float(value: Any) -> float | None:
     if value is None:
         return None

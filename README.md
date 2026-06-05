@@ -5,11 +5,11 @@ charging session data into deterministic receipts, hashes those receipts,
 groups them into daily Merkle batch anchors, verifies anchored batches, and
 exports datasets and figures for research or thesis material.
 
-The current development workflow is database-backed: Postgres stores finalized
-sessions, receipts, batch anchors, batch memberships, verifications, and exported
-query data. Local receipt files are still written as a compatibility/audit
-artifact while the project is evolving. Blockchain transactions and IPFS CIDs
-are represented as placeholders for now.
+The current development workflow is Postgres-first: Postgres is the source of
+truth for finalized sessions, receipts, batch anchors, batch memberships,
+verifications, and exported query data. Local receipt JSON files are legacy
+migration/debug artifacts only. Blockchain transactions and IPFS CIDs are
+represented as placeholders for now.
 
 ## What It Does
 
@@ -19,7 +19,7 @@ are represented as placeholders for now.
 - Supports V2G-ready energy fields: `import_kwh`, `export_kwh`, and `net_kwh`.
 - Supports `charge_only`, `discharge_only`, and `bidirectional` synthetic
   sessions.
-- Stores local receipts under `receipts/`.
+- Stores finalized sessions and receipts in Postgres.
 - Creates mock daily batch anchors from receipt hashes.
 - Verifies that stored batch roots match recomputed Merkle roots.
 - Exports CSV datasets and PNG figures under `exports/`.
@@ -32,7 +32,7 @@ src/
   main.py                FastAPI app and receipt finalization endpoint
   receipt_builder.py     Receipt schema, energy math, pricing, receipt hash
   merkle.py              Merkle tree helper
-  storage.py             Local JSON receipt/index storage
+  storage.py             Legacy JSON receipt/index storage helpers
   synthetic_sessions.py  Synthetic EV charging/V2G session generator
   batch_anchoring.py     Mock daily batch anchoring
   verifier.py            Single receipt verification
@@ -44,7 +44,7 @@ src/
   audit_day.py           Day-level audit helper
   release_notes.py       Release notes generator from git history
 
-receipts/                Local receipt JSON files, index, and mock anchors
+receipts/                Legacy local receipt JSON files and mock anchors
 exports/                 Latest exported CSVs and figures
 results/                 Versioned experiment snapshots
 samples/                 Optional sample inputs
@@ -57,7 +57,7 @@ flowchart LR
   A[Session input] --> B[Build receipt]
   B --> C[Hash receipt JSON]
   B --> D[Merkle root over meter values]
-  C --> E[Save receipt locally]
+  C --> E[Persist receipt in Postgres]
   E --> F[Daily batch anchoring]
   F --> G[Batch Merkle root]
   G --> H[Verify batch root]
@@ -143,7 +143,7 @@ POST /v1/receipts/finalize
 ```
 
 The endpoint accepts a charging session payload, builds a receipt, hashes it,
-saves it under `receipts/`, and returns the receipt plus its hash.
+persists it in Postgres, and returns the receipt plus its hash.
 
 ## Postgres Storage
 
@@ -152,13 +152,19 @@ loads `.env` automatically during normal runtime. The local `.env` is configured
 with:
 
 ```bash
-DATABASE_URL=postgresql+psycopg://proof:proof@localhost:5432/proof_of_charge
+DATABASE_URL=postgresql+psycopg://proof:proof@localhost:5433/proof_of_charge
 REQUIRE_DATABASE=1
+WRITE_LOCAL_RECEIPTS=0
 ```
 
 With `REQUIRE_DATABASE=1`, normal commands fail loudly if `DATABASE_URL` is
 missing. If Postgres is not running, DB-backed commands fail when they try to
 connect, which is intentional for development.
+
+With `WRITE_LOCAL_RECEIPTS=0`, new finalized sessions are stored in Postgres
+without writing duplicate receipt JSON files under `receipts/`. Set
+`WRITE_LOCAL_RECEIPTS=1` only when you intentionally want compatibility JSON
+files for debugging or migration.
 
 Start Postgres locally:
 
@@ -175,7 +181,13 @@ cp .env.example .env
 Initialize the schema:
 
 ```bash
-alembic upgrade head
+python3 -m src.db init
+```
+
+Check DB readiness:
+
+```bash
+python3 -m src.db check
 ```
 
 Then run the API normally:
@@ -184,10 +196,8 @@ Then run the API normally:
 uvicorn src.main:app --reload
 ```
 
-With the default `.env`, finalized sessions are written to both:
-
-- local receipt JSON files under `receipts/`
-- Postgres tables through SQLAlchemy
+With the default `.env`, finalized sessions are written to Postgres tables
+through SQLAlchemy.
 
 Current database tables:
 
@@ -304,12 +314,26 @@ python3 -m src.db drop
 `python3 -m src.db init` is also available as a wrapper around
 `alembic upgrade head`.
 
+`python3 -m src.db check` verifies the connection, applied Alembic revision,
+and expected tables.
+
 Create a new migration after changing `src/models.py`:
 
 ```bash
 alembic revision --autogenerate -m "describe schema change"
 alembic upgrade head
 ```
+
+Backfill existing local receipt JSON files into Postgres:
+
+```bash
+python3 -m src.import_receipts
+```
+
+After verifying the imported data in Postgres, the old local `receipts/*.json`
+files and `receipts/index.json` can be treated as migration artifacts rather
+than active storage. Do not delete them until you are comfortable that the DB
+contains the sessions, receipts, meter values, and anchors you need.
 
 ## Generate Synthetic Sessions
 
@@ -372,6 +396,12 @@ Verify a single receipt:
 python3 -m src.verifier <session_id>
 ```
 
+With the default `.env`, single-receipt verification reads from Postgres,
+recomputes the hash from `receipts.receipt_json`, compares it with
+`receipts.receipt_hash`, and writes a `receipt` verification row to
+`verifications`. If `REQUIRE_DATABASE` is disabled and `DATABASE_URL` is not
+set, it verifies the local receipt JSON file instead.
+
 Verify a daily batch:
 
 ```bash
@@ -397,7 +427,7 @@ Generate CSV exports:
 python3 -m src.export
 ```
 
-With the default `.env`, exports are generated from Postgres. If
+With the default `.env`, exports and figures are generated from Postgres. If
 `REQUIRE_DATABASE` is disabled and `DATABASE_URL` is not set, the command falls
 back to the local receipt JSON/index files.
 
@@ -464,8 +494,14 @@ python3 -m src.tamper <session_id> 1.0
 python3 -m src.verifier <session_id>
 ```
 
-The expected result is that the recomputed hash no longer matches the stored
-receipt hash.
+With the default `.env`, tampering modifies the Postgres `receipt_json` payload
+without updating the stored `receipt_hash`. The expected result is that the
+single-receipt verifier reports a hash mismatch.
+
+Batch verification may still pass after receipt JSON tampering because
+`batch_anchor_receipts` intentionally stores the exact anchored receipt-hash
+membership snapshot. This preserves what was anchored historically. Use
+`python3 -m src.verifier <session_id>` to detect modified receipt content.
 
 ## Tests
 
@@ -489,8 +525,8 @@ Current coverage focuses on:
 
 ## Current Limitations
 
-- File-based JSON storage is still used alongside the database during the
-  migration.
+- Legacy file-based JSON storage remains available only for migration/debug
+  fallback paths.
 - Batch anchoring is local/mock only.
 - `chain_tx` and `cid` are placeholders for future blockchain/IPFS integration.
 - Synthetic sessions simulate charging behavior; there is no live OCPP charger

@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from src import batch_anchoring, verifier, verifier_batch
+from src import batch_anchoring, tamper, verifier, verifier_batch
 from src.models import Base, BatchAnchor, BatchAnchorReceipt, Receipt, Verification
 from src.receipt_builder import build_receipt, hash_receipt
 from src.receipt_schema import DEFAULT_SCHEMA_VERSION
@@ -108,6 +108,54 @@ def test_tampered_receipt_fails_single_receipt_verification(tmp_path, monkeypatc
     monkeypatch.setattr(verifier, "load_index", lambda: {"session-to-tamper": entry})
 
     assert verifier.verify_session("session-to-tamper") is False
+
+
+def test_verify_session_from_db_detects_tampered_receipt_json():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as db_session:
+        _persist_session(db_session, _session("db-tamper-0001", 0.0, 2.0))
+        db_session.commit()
+
+        before = verifier.verify_session_from_db(
+            "db-tamper-0001",
+            db_session=db_session,
+            persist_result=False,
+        )
+        tampered = tamper.tamper_receipt_from_db(
+            "db-tamper-0001",
+            delta_kwh=1.0,
+            db_session=db_session,
+        )
+        after = verifier.verify_session_from_db(
+            "db-tamper-0001",
+            db_session=db_session,
+            persist_result=False,
+        )
+
+        assert before["match"] is True
+        assert tampered["match"] is False
+        assert after["match"] is False
+        assert after["expected_hash"] != after["computed_hash"]
+
+
+def test_verify_session_from_db_persists_receipt_verification_result():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as db_session:
+        _persist_session(db_session, _session("db-verify-0001", 0.0, 2.0))
+        db_session.commit()
+
+        result = verifier.verify_session_from_db("db-verify-0001", db_session=db_session)
+        db_session.commit()
+
+        verification = db_session.query(Verification).one()
+        assert result["match"] is True
+        assert verification.verification_type == "receipt"
+        assert verification.session_id == "db-verify-0001"
+        assert verification.match is True
 
 
 def test_anchor_day_and_verify_day_from_db_round_trip():

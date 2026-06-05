@@ -1,2 +1,0 @@
-session_id,user_id,energy_kwh,import_kwh,export_kwh,net_kwh,start_ts,end_ts,batch_day,receipt_hash,merkle_root,batch_root
-tamper_demo-0001,user-002,3.404,4.028,0.624,3.404,2026-05-23T23:22:59.070749Z,2026-05-24T00:02:59.070749Z,2026-05-23,0x57ef68d25371ede32c5b0dc89a2b35b1627cb6d607609eb70c77f9c0838f96ac,0x318e66c702bdf97c033bbd4d7ad0758c9b6b2bf6c5aee6e2f58313e9f729992a,0x7d73b1b66701d681e4fb73bee18ed7af3a54f14ab4db029649895eed9866f311

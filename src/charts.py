@@ -6,6 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 
+from sqlalchemy import select
+
+from . import db
+from .models import ChargingSession, Receipt
 from .receipt_builder import hash_receipt
 from .storage import BASE_DIR, load_index
 
@@ -277,19 +281,9 @@ def _connector_mix(counts: Dict[str, int], plt) -> None:
     plt.close()
 
 
-def generate_charts(session_prefix: str | None = None) -> None:
-    plt = _safe_import_matplotlib()
-    if plt is None:
-        return
-
+def _chart_payloads_from_files(session_prefix: str | None = None) -> List[Dict[str, Any]]:
     index = load_index()
-    energies: List[float] = []
-    sizes: List[int] = []
-    counts: List[int] = []
-    matches: List[bool] = []
-    meter_series: List[List[Dict[str, Any]]] = []
-    price_series: List[List[Dict[str, Any]]] = []
-
+    payloads = []
     for session_id, entry in index.items():
         if session_prefix and not session_id.startswith(f"{session_prefix}-"):
             continue
@@ -297,6 +291,62 @@ def generate_charts(session_prefix: str | None = None) -> None:
         if not path.exists():
             continue
         payload = _load_receipt_payload(path)
+        payloads.append(
+            {
+                "receipt": payload.get("receipt", {}),
+                "session": payload.get("session", {}),
+                "expected_hash": payload.get("hash"),
+            }
+        )
+    return payloads
+
+
+def _chart_payloads_from_db(session_prefix: str | None = None) -> List[Dict[str, Any]]:
+    session = db.session_scope()
+    try:
+        stmt = select(Receipt).order_by(Receipt.session_id)
+        if session_prefix:
+            stmt = stmt.where(Receipt.session_id.like(f"{session_prefix}-%"))
+        receipts = list(session.scalars(stmt))
+        sessions = {
+            row.session_id: row
+            for row in session.scalars(
+                select(ChargingSession).where(
+                    ChargingSession.session_id.in_([receipt.session_id for receipt in receipts])
+                )
+            )
+        }
+        return [
+            {
+                "receipt": receipt.receipt_json or {},
+                "session": (sessions.get(receipt.session_id).session_json if sessions.get(receipt.session_id) else {}),
+                "expected_hash": receipt.receipt_hash,
+            }
+            for receipt in receipts
+        ]
+    finally:
+        session.close()
+
+
+def _chart_payloads(session_prefix: str | None = None) -> List[Dict[str, Any]]:
+    if db.database_enabled():
+        return _chart_payloads_from_db(session_prefix=session_prefix)
+    return _chart_payloads_from_files(session_prefix=session_prefix)
+
+
+def generate_charts(session_prefix: str | None = None) -> None:
+    plt = _safe_import_matplotlib()
+    if plt is None:
+        return
+
+    energies: List[float] = []
+    sizes: List[int] = []
+    counts: List[int] = []
+    matches: List[bool] = []
+    meter_series: List[List[Dict[str, Any]]] = []
+    price_series: List[List[Dict[str, Any]]] = []
+
+    for payload in _chart_payloads(session_prefix=session_prefix):
         receipt = payload.get("receipt", {})
         if "energy_kwh" in receipt:
             try:
@@ -318,7 +368,7 @@ def generate_charts(session_prefix: str | None = None) -> None:
         if components:
             price_series.append(components)
 
-        expected = payload.get("hash")
+        expected = payload.get("expected_hash")
         computed = hash_receipt(receipt)
         matches.append(bool(expected == computed))
 
@@ -372,7 +422,7 @@ def generate_charts(session_prefix: str | None = None) -> None:
         "- price_over_time_bar.png: Average price per kWh by time bin (bar chart).",
         *registry_captions,
         "",
-        "Note: Figures are generated from locally stored receipts and may be synthetic.",
+        "Note: Figures are generated from Postgres when DATABASE_URL is set; data may be synthetic.",
     ]
     CAPTIONS_PATH.write_text("\\n".join(captions), encoding="utf-8")
 

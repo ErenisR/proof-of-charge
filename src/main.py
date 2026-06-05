@@ -6,7 +6,7 @@ from . import db
 from .receipt_builder import build_receipt, hash_receipt
 from .receipt_schema import DEFAULT_SCHEMA_VERSION, DEFAULT_SESSION_TYPE
 from .repository import persist_finalized_session
-from .storage import save_receipt
+from .storage import save_receipt, write_local_receipts_enabled
 
 app = FastAPI(title="Proof-of-Charge MVP")
 
@@ -48,10 +48,12 @@ def finalize_session(session: SessionInput):
         session_dict: Dict[str, Any] = session.model_dump(by_alias=True)
         receipt = build_receipt(session_dict)
         receipt_hash = hash_receipt(receipt)
-        
-        save_receipt(session.session_id, receipt, receipt_hash, session_dict)
-        if db.database_enabled():
+
+        db_enabled = db.database_enabled()
+        if db_enabled:
             persist_finalized_session(session_dict, receipt, receipt_hash)
+        if not db_enabled or write_local_receipts_enabled():
+            save_receipt(session.session_id, receipt, receipt_hash, session_dict)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
