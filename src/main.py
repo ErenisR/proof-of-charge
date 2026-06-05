@@ -2,12 +2,11 @@
 from contextlib import contextmanager
 from fastapi import FastAPI, HTTPException, Query
 from typing import Any, Dict
-from sqlalchemy import select
 
-from . import db
-from .models import BatchAnchor, ChargingSession, Receipt, Verification
+from . import api_service, audit_service, db
 from .api_schemas import (
     AnchorResponse,
+    AuditSessionResponse,
     DbHealthResponse,
     FinalizeSessionRequest,
     FinalizeSessionResponse,
@@ -48,8 +47,8 @@ def finalize_session(session: FinalizeSessionRequest) -> FinalizeSessionResponse
             persist_finalized_session(session_dict, receipt, receipt_hash)
         if not db_enabled or write_local_receipts_enabled():
             save_receipt(session.session_id, receipt, receipt_hash, session_dict)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     # Later: send to IPFS and anchor on-chain.
     return FinalizeSessionResponse(receipt=receipt, hash=receipt_hash)
@@ -70,33 +69,30 @@ def list_sessions(
     session_prefix: str | None = None,
 ) -> PaginatedResponse[SessionSummaryResponse]:
     with _with_db_session() as session:
-        stmt = select(ChargingSession).order_by(ChargingSession.start_ts.desc(), ChargingSession.session_id)
-        if session_prefix:
-            stmt = stmt.where(ChargingSession.session_id.like(f"{session_prefix}-%"))
-        rows = list(session.scalars(stmt.offset(offset).limit(limit)))
-        return PaginatedResponse(
-            items=[SessionSummaryResponse.from_row(row) for row in rows],
+        return api_service.list_sessions(
+            db_session=session,
             limit=limit,
             offset=offset,
+            session_prefix=session_prefix,
         )
 
 
 @app.get("/v1/sessions/{session_id}", response_model=SessionDetailResponse)
 def get_session(session_id: str) -> SessionDetailResponse:
     with _with_db_session() as session:
-        row = session.get(ChargingSession, session_id)
-        if not row:
+        result = api_service.get_session(session, session_id)
+        if not result:
             raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
-        return SessionDetailResponse.from_row(row)
+        return result
 
 
 @app.get("/v1/receipts/{session_id}", response_model=ReceiptResponse)
 def get_receipt(session_id: str) -> ReceiptResponse:
     with _with_db_session() as session:
-        row = session.get(Receipt, session_id)
-        if not row:
+        result = api_service.get_receipt(session, session_id)
+        if not result:
             raise HTTPException(status_code=404, detail=f"Receipt {session_id} not found")
-        return ReceiptResponse.from_row(row)
+        return result
 
 
 @app.get("/v1/anchors", response_model=PaginatedResponse[AnchorResponse])
@@ -107,16 +103,12 @@ def list_anchors(
     session_prefix: str | None = None,
 ) -> PaginatedResponse[AnchorResponse]:
     with _with_db_session() as session:
-        stmt = select(BatchAnchor).order_by(BatchAnchor.anchored_at.desc(), BatchAnchor.id.desc())
-        if day:
-            stmt = stmt.where(BatchAnchor.day == day)
-        if session_prefix is not None:
-            stmt = stmt.where(BatchAnchor.session_prefix == session_prefix)
-        rows = list(session.scalars(stmt.offset(offset).limit(limit)))
-        return PaginatedResponse(
-            items=[AnchorResponse.from_row(row) for row in rows],
+        return api_service.list_anchors(
+            db_session=session,
             limit=limit,
             offset=offset,
+            day=day,
+            session_prefix=session_prefix,
         )
 
 
@@ -129,16 +121,21 @@ def list_verifications(
     verification_type: str | None = None,
 ) -> PaginatedResponse[VerificationResponse]:
     with _with_db_session() as session:
-        stmt = select(Verification).order_by(Verification.created_at.desc(), Verification.id.desc())
-        if session_id:
-            stmt = stmt.where(Verification.session_id == session_id)
-        if day:
-            stmt = stmt.where(Verification.day == day)
-        if verification_type:
-            stmt = stmt.where(Verification.verification_type == verification_type)
-        rows = list(session.scalars(stmt.offset(offset).limit(limit)))
-        return PaginatedResponse(
-            items=[VerificationResponse.from_row(row) for row in rows],
+        return api_service.list_verifications(
+            db_session=session,
             limit=limit,
             offset=offset,
+            session_id=session_id,
+            day=day,
+            verification_type=verification_type,
         )
+
+
+@app.post("/v1/audit/sessions/{session_id}", response_model=AuditSessionResponse)
+def audit_session(session_id: str) -> AuditSessionResponse:
+    try:
+        return AuditSessionResponse(**audit_service.audit_session(session_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

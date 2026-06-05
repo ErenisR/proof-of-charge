@@ -171,35 +171,18 @@ def persist_batch_anchor(
 
 
 def persist_batch_verification(result: Dict[str, Any], db_session: Session | None = None) -> None:
-    owns_session = db_session is None
-    session = db_session or db.session_scope()
-
-    try:
-        session.add(
-            Verification(
-                day=result.get("day"),
-                session_id=result.get("session_id"),
-                expected_hash=result.get("expected_hash"),
-                computed_hash=result.get("computed_hash"),
-                expected_root=result.get("expected_root"),
-                computed_root=result.get("computed_root"),
-                match=bool(result.get("match")),
-                verification_type="batch",
-                details_json=result,
-            )
-        )
-        if owns_session:
-            session.commit()
-    except Exception:
-        if owns_session:
-            session.rollback()
-        raise
-    finally:
-        if owns_session:
-            session.close()
+    persist_verification_result(result, verification_type="batch", db_session=db_session)
 
 
 def persist_receipt_verification(result: Dict[str, Any], db_session: Session | None = None) -> None:
+    persist_verification_result(result, verification_type="receipt", db_session=db_session)
+
+
+def persist_verification_result(
+    result: Dict[str, Any],
+    verification_type: str,
+    db_session: Session | None = None,
+) -> None:
     owns_session = db_session is None
     session = db_session or db.session_scope()
 
@@ -213,7 +196,7 @@ def persist_receipt_verification(result: Dict[str, Any], db_session: Session | N
                 expected_root=result.get("expected_root"),
                 computed_root=result.get("computed_root"),
                 match=bool(result.get("match")),
-                verification_type="receipt",
+                verification_type=verification_type,
                 details_json=result,
             )
         )

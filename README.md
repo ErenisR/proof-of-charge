@@ -30,6 +30,9 @@ represented as placeholders for now.
 ```text
 src/
   main.py                FastAPI app and receipt finalization endpoint
+  api_schemas.py         Pydantic API request/response models
+  api_service.py         Read-only API query service
+  audit_service.py       DB audit service for rebuilt receipt verification
   receipt_builder.py     Receipt schema, energy math, pricing, receipt hash
   merkle.py              Merkle tree helper
   storage.py             Legacy JSON receipt/index storage helpers
@@ -146,6 +149,7 @@ GET  /v1/sessions/{session_id}
 GET  /v1/receipts/{session_id}
 GET  /v1/anchors
 GET  /v1/verifications
+POST /v1/audit/sessions/{session_id}
 ```
 
 The endpoint accepts a charging session payload, builds a receipt, hashes it,
@@ -431,6 +435,21 @@ Postgres, recomputes the batch root, and writes the result to `verifications`.
 If `REQUIRE_DATABASE` is disabled and `DATABASE_URL` is not set, it uses the
 local receipt files and `receipts/anchors.json`.
 
+Audit a DB-backed session by rebuilding the receipt from stored session data:
+
+```bash
+python3 -m src.audit_service <session_id>
+```
+
+Or through the API:
+
+```text
+POST /v1/audit/sessions/{session_id}
+```
+
+The audit checks whether the rebuilt receipt, stored `receipt_json`, stored
+`receipt_hash`, and normalized receipt columns still agree.
+
 ## Export Datasets And Figures
 
 Generate CSV exports:
@@ -532,6 +551,7 @@ Current coverage focuses on:
 - file-backed and DB-backed batch anchoring and batch verification
 - exact batch anchor receipt membership snapshots
 - detection of a tampered receipt
+- DB audit detection for tampered receipt JSON and normalized receipt columns
 - SQLAlchemy persistence for sessions, meter values, and receipts
 - DB-backed CSV exports
 

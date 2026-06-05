@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from src import batch_anchoring, tamper, verifier, verifier_batch
+from src import audit_service, batch_anchoring, tamper, verifier, verifier_batch
 from src.models import Base, BatchAnchor, BatchAnchorReceipt, Receipt, Verification
 from src.receipt_builder import build_receipt, hash_receipt
 from src.receipt_schema import DEFAULT_SCHEMA_VERSION
@@ -156,6 +156,60 @@ def test_verify_session_from_db_persists_receipt_verification_result():
         assert verification.verification_type == "receipt"
         assert verification.session_id == "db-verify-0001"
         assert verification.match is True
+
+
+def test_audit_session_from_db_detects_tampered_receipt_json():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as db_session:
+        _persist_session(db_session, _session("db-audit-0001", 0.0, 2.0))
+        db_session.commit()
+
+        before = audit_service.audit_session(
+            "db-audit-0001",
+            db_session=db_session,
+            persist_result=False,
+        )
+        tamper.tamper_receipt_from_db(
+            "db-audit-0001",
+            delta_kwh=1.0,
+            db_session=db_session,
+        )
+        after = audit_service.audit_session(
+            "db-audit-0001",
+            db_session=db_session,
+            persist_result=False,
+        )
+
+        assert before["match"] is True
+        assert after["match"] is False
+        assert after["receipt_json_match"] is False
+        assert after["stored_json_hash_match"] is False
+        assert after["hash_match"] is True
+
+
+def test_audit_session_from_db_detects_normalized_column_mismatch():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as db_session:
+        _persist_session(db_session, _session("db-column-audit-0001", 0.0, 2.0))
+        db_session.commit()
+
+        receipt = db_session.get(Receipt, "db-column-audit-0001")
+        receipt.energy_kwh = 99.0
+        db_session.commit()
+
+        result = audit_service.audit_session(
+            "db-column-audit-0001",
+            db_session=db_session,
+            persist_result=False,
+        )
+
+        assert result["match"] is False
+        assert result["normalized_match"] is False
+        assert result["normalized_mismatches"][0]["field"] == "energy_kwh"
 
 
 def test_anchor_day_and_verify_day_from_db_round_trip():

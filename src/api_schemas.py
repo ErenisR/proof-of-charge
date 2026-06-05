@@ -236,3 +236,23 @@ class VerificationResponse(BaseModel):
             details=row.details_json,
             created_at=isoformat(row.created_at),
         )
+
+
+class AuditMismatchResponse(BaseModel):
+    field: str
+    stored_column: Any
+    receipt_json: Any
+
+
+class AuditSessionResponse(BaseModel):
+    session_id: str
+    day: str | None
+    match: bool
+    receipt_json_match: bool
+    hash_match: bool
+    stored_json_hash_match: bool
+    normalized_match: bool
+    expected_hash: str
+    rebuilt_hash: str
+    stored_receipt_json_hash: str
+    normalized_mismatches: list[AuditMismatchResponse]

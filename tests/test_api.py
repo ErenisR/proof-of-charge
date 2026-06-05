@@ -131,6 +131,23 @@ def test_get_receipt_anchors_and_verifications(monkeypatch):
     assert verifications["items"][0]["match"] is True
 
 
+def test_audit_session(monkeypatch):
+    _prepare_api_db(monkeypatch)
+
+    audit = main.audit_session("api-session-0001").model_dump()
+    verifications = main.list_verifications(
+        limit=50,
+        offset=0,
+        session_id="api-session-0001",
+        verification_type="audit",
+    ).model_dump()
+
+    assert audit["match"] is True
+    assert audit["hash_match"] is True
+    assert audit["receipt_json_match"] is True
+    assert verifications["items"][0]["verification_type"] == "audit"
+
+
 def test_missing_receipt_returns_404(monkeypatch):
     _prepare_api_db(monkeypatch)
 
