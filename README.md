@@ -140,10 +140,22 @@ The API exposes:
 
 ```text
 POST /v1/receipts/finalize
+GET  /health/db
+GET  /v1/sessions
+GET  /v1/sessions/{session_id}
+GET  /v1/receipts/{session_id}
+GET  /v1/anchors
+GET  /v1/verifications
 ```
 
 The endpoint accepts a charging session payload, builds a receipt, hashes it,
 persists it in Postgres, and returns the receipt plus its hash.
+
+The read-only endpoints expose stored Postgres data for demos, debugging, and
+future dashboard/frontend integration. List endpoints support bounded pagination
+with `limit` and `offset`; session, anchor, and verification lists also support
+basic filters such as `session_prefix`, `day`, `session_id`, and
+`verification_type`.
 
 ## Postgres Storage
 

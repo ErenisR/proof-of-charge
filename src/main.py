@@ -1,8 +1,22 @@
 # src/main.py
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
-from typing import Any, Dict, List
+from contextlib import contextmanager
+from fastapi import FastAPI, HTTPException, Query
+from typing import Any, Dict
+from sqlalchemy import select
+
 from . import db
+from .models import BatchAnchor, ChargingSession, Receipt, Verification
+from .api_schemas import (
+    AnchorResponse,
+    DbHealthResponse,
+    FinalizeSessionRequest,
+    FinalizeSessionResponse,
+    PaginatedResponse,
+    ReceiptResponse,
+    SessionDetailResponse,
+    SessionSummaryResponse,
+    VerificationResponse,
+)
 from .receipt_builder import build_receipt, hash_receipt
 from .receipt_schema import DEFAULT_SCHEMA_VERSION, DEFAULT_SESSION_TYPE
 from .repository import persist_finalized_session
@@ -10,42 +24,22 @@ from .storage import save_receipt, write_local_receipts_enabled
 
 app = FastAPI(title="Proof-of-Charge MVP")
 
-class MeterValue(BaseModel):
-    ts: str
-    energy_kwh: float | None = None
-    import_kwh: float | None = None
-    export_kwh: float | None = None
 
-class PricingComponent(BaseModel):
-    from_ts: str = Field(..., alias="from")
-    to_ts: str = Field(..., alias="to")
-    price_per_kwh: float
+@contextmanager
+def _with_db_session():
+    session = db.session_scope()
+    try:
+        yield session
+    finally:
+        session.close()
 
-class Pricing(BaseModel):
-    currency: str = "EUR"
-    model: str = "TOU"
-    components: List[PricingComponent] = Field(default_factory=list)
-    import_components: List[PricingComponent] = Field(default_factory=list)
-    export_components: List[PricingComponent] = Field(default_factory=list)
 
-class SessionInput(BaseModel):
-    session_id: str
-    user_id: str
-    evse_id: str
-    ocpp_tx_id: str
-    start_ts: str
-    end_ts: str
-    schema_version: str | None = DEFAULT_SCHEMA_VERSION
-    session_type: str | None = DEFAULT_SESSION_TYPE
-    energy_summary: Dict[str, Any] | None = None
-    settlement: Dict[str, Any] | None = None
-    meter_values: List[MeterValue]
-    pricing: Pricing | None = None
-
-@app.post("/v1/receipts/finalize")
-def finalize_session(session: SessionInput):
+@app.post("/v1/receipts/finalize", response_model=FinalizeSessionResponse)
+def finalize_session(session: FinalizeSessionRequest) -> FinalizeSessionResponse:
     try:
         session_dict: Dict[str, Any] = session.model_dump(by_alias=True)
+        session_dict["schema_version"] = session_dict.get("schema_version") or DEFAULT_SCHEMA_VERSION
+        session_dict["session_type"] = session_dict.get("session_type") or DEFAULT_SESSION_TYPE
         receipt = build_receipt(session_dict)
         receipt_hash = hash_receipt(receipt)
 
@@ -58,7 +52,93 @@ def finalize_session(session: SessionInput):
         raise HTTPException(status_code=400, detail=str(e))
 
     # Later: send to IPFS and anchor on-chain.
-    return {
-        "receipt": receipt,
-        "hash": receipt_hash
-    }
+    return FinalizeSessionResponse(receipt=receipt, hash=receipt_hash)
+
+
+@app.get("/health/db", response_model=DbHealthResponse)
+def health_db() -> DbHealthResponse:
+    try:
+        return DbHealthResponse(**db.check_database())
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@app.get("/v1/sessions", response_model=PaginatedResponse[SessionSummaryResponse])
+def list_sessions(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    session_prefix: str | None = None,
+) -> PaginatedResponse[SessionSummaryResponse]:
+    with _with_db_session() as session:
+        stmt = select(ChargingSession).order_by(ChargingSession.start_ts.desc(), ChargingSession.session_id)
+        if session_prefix:
+            stmt = stmt.where(ChargingSession.session_id.like(f"{session_prefix}-%"))
+        rows = list(session.scalars(stmt.offset(offset).limit(limit)))
+        return PaginatedResponse(
+            items=[SessionSummaryResponse.from_row(row) for row in rows],
+            limit=limit,
+            offset=offset,
+        )
+
+
+@app.get("/v1/sessions/{session_id}", response_model=SessionDetailResponse)
+def get_session(session_id: str) -> SessionDetailResponse:
+    with _with_db_session() as session:
+        row = session.get(ChargingSession, session_id)
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        return SessionDetailResponse.from_row(row)
+
+
+@app.get("/v1/receipts/{session_id}", response_model=ReceiptResponse)
+def get_receipt(session_id: str) -> ReceiptResponse:
+    with _with_db_session() as session:
+        row = session.get(Receipt, session_id)
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Receipt {session_id} not found")
+        return ReceiptResponse.from_row(row)
+
+
+@app.get("/v1/anchors", response_model=PaginatedResponse[AnchorResponse])
+def list_anchors(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    day: str | None = None,
+    session_prefix: str | None = None,
+) -> PaginatedResponse[AnchorResponse]:
+    with _with_db_session() as session:
+        stmt = select(BatchAnchor).order_by(BatchAnchor.anchored_at.desc(), BatchAnchor.id.desc())
+        if day:
+            stmt = stmt.where(BatchAnchor.day == day)
+        if session_prefix is not None:
+            stmt = stmt.where(BatchAnchor.session_prefix == session_prefix)
+        rows = list(session.scalars(stmt.offset(offset).limit(limit)))
+        return PaginatedResponse(
+            items=[AnchorResponse.from_row(row) for row in rows],
+            limit=limit,
+            offset=offset,
+        )
+
+
+@app.get("/v1/verifications", response_model=PaginatedResponse[VerificationResponse])
+def list_verifications(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    session_id: str | None = None,
+    day: str | None = None,
+    verification_type: str | None = None,
+) -> PaginatedResponse[VerificationResponse]:
+    with _with_db_session() as session:
+        stmt = select(Verification).order_by(Verification.created_at.desc(), Verification.id.desc())
+        if session_id:
+            stmt = stmt.where(Verification.session_id == session_id)
+        if day:
+            stmt = stmt.where(Verification.day == day)
+        if verification_type:
+            stmt = stmt.where(Verification.verification_type == verification_type)
+        rows = list(session.scalars(stmt.offset(offset).limit(limit)))
+        return PaginatedResponse(
+            items=[VerificationResponse.from_row(row) for row in rows],
+            limit=limit,
+            offset=offset,
+        )

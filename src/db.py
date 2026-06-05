@@ -2,6 +2,7 @@ import os
 import sys
 from functools import lru_cache
 from pathlib import Path
+from typing import TypedDict
 
 from alembic import command as alembic_command
 from alembic.config import Config
@@ -13,6 +14,15 @@ from sqlalchemy.orm import Session, sessionmaker
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_FILE = ROOT_DIR / ".env"
 ALEMBIC_INI = ROOT_DIR / "alembic.ini"
+
+
+class DatabaseCheckResult(TypedDict):
+    user: str
+    database: str
+    current_revision: str | None
+    head_revision: str | None
+    missing_tables: list[str]
+    ok: bool
 
 
 def _load_env_file() -> None:
@@ -85,7 +95,7 @@ def run_migrations() -> None:
     alembic_command.upgrade(Config(str(ALEMBIC_INI)), "head")
 
 
-def check_database() -> dict[str, object]:
+def check_database() -> DatabaseCheckResult:
     from .models import Base
 
     require_database()
