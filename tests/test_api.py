@@ -106,6 +106,36 @@ def test_health_db(monkeypatch):
     assert response["ok"] is True
 
 
+def test_finalize_session_validation_error_returns_400(monkeypatch):
+    session_payload = _session()
+    session_payload["meter_values"] = session_payload["meter_values"][:1]
+    request = main.FinalizeSessionRequest.model_validate(session_payload)
+
+    monkeypatch.setattr(main.db, "database_enabled", lambda: False)
+
+    with pytest.raises(HTTPException) as exc:
+        main.finalize_session(request)
+
+    assert exc.value.status_code == 400
+    assert "Need at least 2 meter values" in exc.value.detail
+
+
+def test_finalize_session_database_error_returns_503(monkeypatch):
+    request = main.FinalizeSessionRequest.model_validate(_session())
+
+    def raise_database_error(*args, **kwargs):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(main.db, "database_enabled", lambda: True)
+    monkeypatch.setattr(main, "persist_finalized_session", raise_database_error)
+
+    with pytest.raises(HTTPException) as exc:
+        main.finalize_session(request)
+
+    assert exc.value.status_code == 503
+    assert "database unavailable" in exc.value.detail
+
+
 def test_list_and_get_sessions(monkeypatch):
     _prepare_api_db(monkeypatch)
 

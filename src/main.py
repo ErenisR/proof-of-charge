@@ -1,6 +1,7 @@
 # src/main.py
 from contextlib import contextmanager
 from fastapi import FastAPI, HTTPException, Query
+from sqlalchemy.exc import SQLAlchemyError
 from typing import Any, Dict
 
 from . import api_service, audit_service, db
@@ -41,14 +42,19 @@ def finalize_session(session: FinalizeSessionRequest) -> FinalizeSessionResponse
         session_dict["session_type"] = session_dict.get("session_type") or DEFAULT_SESSION_TYPE
         receipt = build_receipt(session_dict)
         receipt_hash = hash_receipt(receipt)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
+    try:
         db_enabled = db.database_enabled()
         if db_enabled:
             persist_finalized_session(session_dict, receipt, receipt_hash)
         if not db_enabled or write_local_receipts_enabled():
             save_receipt(session.session_id, receipt, receipt_hash, session_dict)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Database operation failed") from exc
 
     # Later: send to IPFS and anchor on-chain.
     return FinalizeSessionResponse(receipt=receipt, hash=receipt_hash)

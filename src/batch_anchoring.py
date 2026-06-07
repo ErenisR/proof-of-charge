@@ -1,7 +1,7 @@
 # src/batch_anchoring.py
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
@@ -251,12 +251,17 @@ def _collect_receipt_hashes_from_db(
     day: str,
     session_prefix: str | None = None,
 ) -> Tuple[List[str], List[str]]:
-    pairs: List[Tuple[str, str]] = []
-    for receipt in _receipts_for_prefix(session, session_prefix=session_prefix):
-        if _receipt_day_from_row(receipt) != day:
-            continue
-        pairs.append((receipt.session_id, receipt.receipt_hash))
-    pairs.sort(key=lambda pair: pair[0])
+    day_start, day_end = _day_bounds(day)
+    stmt = (
+        select(Receipt.session_id, Receipt.receipt_hash)
+        .where(Receipt.start_ts >= day_start)
+        .where(Receipt.start_ts < day_end)
+        .order_by(Receipt.session_id)
+    )
+    if session_prefix:
+        stmt = stmt.where(Receipt.session_id.like(f"{session_prefix}-%"))
+
+    pairs = list(session.execute(stmt))
     return [receipt_hash for _, receipt_hash in pairs], [session_id for session_id, _ in pairs]
 
 
@@ -283,14 +288,15 @@ def _normalized_hash(receipt_hash: str) -> str:
 
 def _receipts_for_prefix(session: Session, session_prefix: str | None = None) -> List[Receipt]:
     stmt = select(Receipt).order_by(Receipt.session_id)
-    receipts = list(session.scalars(stmt))
-    if not session_prefix:
-        return receipts
-    return [
-        receipt
-        for receipt in receipts
-        if receipt.session_id.startswith(f"{session_prefix}-")
-    ]
+    if session_prefix:
+        stmt = stmt.where(Receipt.session_id.like(f"{session_prefix}-%"))
+    return list(session.scalars(stmt))
+
+
+def _day_bounds(day: str) -> tuple[datetime, datetime]:
+    parsed_day = date.fromisoformat(day)
+    day_start = datetime.combine(parsed_day, time.min, tzinfo=timezone.utc)
+    return day_start, day_start + timedelta(days=1)
 
 
 def _receipt_day_from_row(receipt: Receipt) -> str | None:

@@ -84,8 +84,36 @@ def _export_components(pricing: Dict[str, Any]) -> List[Dict[str, Any]]:
     )
 
 
-def _sum_weighted_cost(start_ts: str, end_ts: str, energy_kwh: float, components: List[Dict[str, Any]]) -> float:
-    if not components or energy_kwh == 0:
+def _validate_pricing_components(components: List[Dict[str, Any]], field_name: str) -> None:
+    for index, component in enumerate(components):
+        prefix = f"{field_name}[{index}]"
+        if "from" not in component:
+            raise ValueError(f"{prefix}.from is required")
+        if "to" not in component:
+            raise ValueError(f"{prefix}.to is required")
+        try:
+            _parse_ts(component["from"])
+        except Exception as exc:
+            raise ValueError(f"Invalid {prefix}.from: {component['from']}") from exc
+        try:
+            _parse_ts(component["to"])
+        except Exception as exc:
+            raise ValueError(f"Invalid {prefix}.to: {component['to']}") from exc
+        _to_float(component.get("price_per_kwh"), f"{prefix}.price_per_kwh")
+
+
+def _sum_weighted_cost(
+    start_ts: str,
+    end_ts: str,
+    energy_kwh: float,
+    components: List[Dict[str, Any]],
+    field_name: str,
+) -> float:
+    if not components:
+        return 0.0
+
+    _validate_pricing_components(components, field_name)
+    if energy_kwh == 0:
         return 0.0
 
     session_start = _parse_ts(start_ts)
@@ -96,23 +124,15 @@ def _sum_weighted_cost(start_ts: str, end_ts: str, energy_kwh: float, components
 
     total = 0.0
     for c in components:
-        c_from = c.get("from")
-        c_to = c.get("to")
-        price = c.get("price_per_kwh", 0.0)
-        if not c_from or not c_to:
+        c_start = _parse_ts(c["from"])
+        c_end = _parse_ts(c["to"])
+        overlap_start = max(session_start, c_start)
+        overlap_end = min(session_end, c_end)
+        overlap_seconds = (overlap_end - overlap_start).total_seconds()
+        if overlap_seconds <= 0:
             continue
-        try:
-            c_start = _parse_ts(c_from)
-            c_end = _parse_ts(c_to)
-            overlap_start = max(session_start, c_start)
-            overlap_end = min(session_end, c_end)
-            overlap_seconds = (overlap_end - overlap_start).total_seconds()
-            if overlap_seconds <= 0:
-                continue
-            share = overlap_seconds / session_seconds
-            total += energy_kwh * share * _to_float(price, "price_per_kwh")
-        except Exception:
-            continue
+        share = overlap_seconds / session_seconds
+        total += energy_kwh * share * _to_float(c["price_per_kwh"], "price_per_kwh")
     return round(total, 3)
 
 
@@ -151,8 +171,20 @@ def build_receipt(session: Dict[str, Any]) -> Dict[str, Any]:
     pricing = session.get("pricing", {})
     import_components = _pricing_components(pricing)
     export_components = _export_components(pricing)
-    import_price = _sum_weighted_cost(session["start_ts"], session["end_ts"], import_kwh, import_components)
-    export_price = _sum_weighted_cost(session["start_ts"], session["end_ts"], export_kwh, export_components)
+    import_price = _sum_weighted_cost(
+        session["start_ts"],
+        session["end_ts"],
+        import_kwh,
+        import_components,
+        "pricing.import_components",
+    )
+    export_price = _sum_weighted_cost(
+        session["start_ts"],
+        session["end_ts"],
+        export_kwh,
+        export_components,
+        "pricing.export_components",
+    )
 
     gross_import_cost = round(import_price, 3)
     gross_export_credit = round(export_price, 3)

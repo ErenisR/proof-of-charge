@@ -102,6 +102,22 @@ def test_non_monotone_directional_meter_values_are_rejected():
         build_receipt(session)
 
 
+def test_invalid_pricing_component_is_rejected():
+    session = sample_session()
+    session["pricing"]["import_components"][0]["price_per_kwh"] = "not-a-price"
+
+    with pytest.raises(ValueError, match=r"pricing\.import_components\[0\]\.price_per_kwh"):
+        build_receipt(session)
+
+
+def test_pricing_component_missing_time_window_is_rejected():
+    session = sample_session()
+    del session["pricing"]["import_components"][0]["to"]
+
+    with pytest.raises(ValueError, match=r"pricing\.import_components\[0\]\.to is required"):
+        build_receipt(session)
+
+
 def test_receipt_schema_rejects_missing_required_fields():
     receipt = build_receipt(sample_session())
     invalid = copy.deepcopy(receipt)

@@ -48,6 +48,17 @@ def _session(session_id: str, start_import: float, end_import: float) -> dict:
     }
 
 
+def _session_on_day(session_id: str, day: str, start_import: float, end_import: float) -> dict:
+    session = _session(session_id, start_import, end_import)
+    session["start_ts"] = f"{day}T10:00:00Z"
+    session["end_ts"] = f"{day}T10:05:00Z"
+    session["meter_values"][0]["ts"] = f"{day}T10:00:00Z"
+    session["meter_values"][1]["ts"] = f"{day}T10:05:00Z"
+    session["pricing"]["import_components"][0]["from"] = f"{day}T10:00:00Z"
+    session["pricing"]["import_components"][0]["to"] = f"{day}T10:05:00Z"
+    return session
+
+
 def _write_payload(tmp_path: Path, session: dict) -> tuple[dict, dict]:
     receipt = build_receipt(session)
     receipt_hash = hash_receipt(receipt)
@@ -97,6 +108,33 @@ def test_anchor_day_and_verify_day_round_trip(tmp_path, monkeypatch):
     assert result["receipt_count"] == 2
     assert index["run-test-0001"]["batch_root"] == batch_root
     assert index["run-test-0001"]["batch_day"] == "2026-03-07"
+
+
+def test_file_anchor_lookup_requires_matching_prefix(tmp_path, monkeypatch):
+    anchors_file = tmp_path / "anchors.json"
+    anchors_file.write_text(
+        json.dumps(
+            {
+                "batches": [
+                    {
+                        "day": "2026-03-07",
+                        "session_prefix": None,
+                        "batch_root": "0xunprefixed",
+                    },
+                    {
+                        "day": "2026-03-07",
+                        "session_prefix": "run-test",
+                        "batch_root": "0xprefixed",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(verifier_batch, "ANCHORS_FILE", anchors_file)
+
+    assert verifier_batch._find_anchor("2026-03-07")["batch_root"] == "0xunprefixed"
+    assert verifier_batch._find_anchor("2026-03-07", session_prefix="run-test")["batch_root"] == "0xprefixed"
 
 
 def test_tampered_receipt_fails_single_receipt_verification(tmp_path, monkeypatch):
@@ -269,6 +307,27 @@ def test_anchor_day_from_db_filters_by_prefix():
         assert count == 2
         assert db_session.query(BatchAnchor).one().receipt_count == 2
         assert db_session.query(BatchAnchorReceipt).count() == 2
+
+
+def test_anchor_day_from_db_filters_by_day_in_query():
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as db_session:
+        _persist_session(db_session, _session_on_day("run-day-0001", "2026-03-07", 0.0, 2.0))
+        _persist_session(db_session, _session_on_day("run-day-0002", "2026-03-07", 0.0, 3.0))
+        _persist_session(db_session, _session_on_day("run-day-0003", "2026-03-08", 0.0, 4.0))
+        db_session.commit()
+
+        _batch_root, count = batch_anchoring.anchor_day_from_db(
+            "2026-03-07",
+            session_prefix="run-day",
+            db_session=db_session,
+        )
+
+        memberships = db_session.query(BatchAnchorReceipt).all()
+        assert count == 2
+        assert {membership.session_id for membership in memberships} == {"run-day-0001", "run-day-0002"}
 
 
 def test_anchor_day_from_db_is_idempotent_for_same_batch():

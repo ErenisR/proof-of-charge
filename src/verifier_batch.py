@@ -27,11 +27,12 @@ def _load_anchors() -> Dict[str, Any]:
 
 def _find_anchor(day: str, session_prefix: str | None = None) -> Dict[str, Any] | None:
     anchors = _load_anchors().get("batches", [])
+    expected_prefix = session_prefix
     # Newest match first to avoid stale anchors when same day is anchored multiple times.
     for batch in reversed(anchors):
         if batch.get("day") != day:
             continue
-        if session_prefix and batch.get("session_prefix") != session_prefix:
+        if batch.get("session_prefix") != expected_prefix:
             continue
         return batch
     return None
