@@ -46,7 +46,11 @@ src/
   tamper.py              Tampering helper for verification demos
   audit_day.py           Day-level audit helper
   release_notes.py       Release notes generator from git history
+  blockchain/            Blockchain anchoring integration helpers
 
+contracts/               Solidity contracts for batch-root anchoring
+scripts/                 Deployment and operational scripts
+docs/                    Architecture notes, paper outline, and reports
 receipts/                Legacy local receipt JSON files and mock anchors
 exports/                 Latest exported CSVs and figures
 results/                 Versioned experiment snapshots
@@ -188,6 +192,12 @@ Start Postgres locally:
 docker compose up -d postgres
 ```
 
+Start Postgres and the local Anvil blockchain:
+
+```bash
+docker compose up -d postgres anvil
+```
+
 If you need to recreate your local env file:
 
 ```bash
@@ -223,6 +233,32 @@ Current database tables:
 - `batch_anchors`
 - `batch_anchor_receipts`
 - `verifications`
+
+## Local Blockchain
+
+The Docker Compose setup includes an Anvil service for local blockchain
+development:
+
+```bash
+docker compose up -d anvil
+```
+
+The local RPC endpoint is:
+
+```bash
+WEB3_RPC_URL=http://127.0.0.1:8545
+CHAIN_ID=31337
+```
+
+Deploy the anchor contract after Anvil is running:
+
+```bash
+python3 scripts/deploy_anchor.py
+```
+
+The script prints the `ANCHOR_CONTRACT_ADDRESS` to copy into `.env`. Anvil state
+is ephemeral by default, so recreate/redeploy the contract after recreating the
+Anvil container.
 
 Database relationship diagram:
 

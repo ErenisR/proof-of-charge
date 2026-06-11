@@ -210,3 +210,7 @@ receipts/
 samples/
 exports/
 results/
+cache/
+contracts/out/
+contracts/cache/
+contracts/lib/
