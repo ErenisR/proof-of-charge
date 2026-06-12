@@ -260,6 +260,25 @@ The script prints the `ANCHOR_CONTRACT_ADDRESS` to copy into `.env`. Anvil state
 is ephemeral by default, so recreate/redeploy the contract after recreating the
 Anvil container.
 
+Publish an existing Postgres batch anchor on-chain:
+
+```bash
+python3 -m src.blockchain.publisher 2026-03-07
+```
+
+Verify that the Postgres anchor matches the on-chain anchor:
+
+```bash
+python3 -m src.blockchain.verifier 2026-03-07
+```
+
+If the DB anchor was created with a session prefix, pass the same prefix:
+
+```bash
+python3 -m src.blockchain.publisher 2026-03-07 --prefix run-test
+python3 -m src.blockchain.verifier 2026-03-07 --prefix run-test
+```
+
 Database relationship diagram:
 
 ```mermaid

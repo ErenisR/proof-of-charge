@@ -20,6 +20,8 @@ Local deployment:
 1. Run `anvil` or `docker compose up -d anvil`.
 2. Run `python3 scripts/deploy_anchor.py`.
 3. Copy the printed `ANCHOR_CONTRACT_ADDRESS` into `.env`.
+4. Publish a DB anchor with `python3 -m src.blockchain.publisher <day>`.
+5. Verify it with `python3 -m src.blockchain.verifier <day>`.
 
 The Docker Compose Anvil service is local-development infrastructure. It does
 not persist chain state by default; redeploy the contract after recreating the
