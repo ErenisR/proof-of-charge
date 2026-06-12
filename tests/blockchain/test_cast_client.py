@@ -4,10 +4,12 @@ import pytest
 
 from src.blockchain.cast_client import (
     OnChainAnchor,
+    TransactionReceipt,
     anchor_batch,
     get_anchor,
     normalize_bytes32,
     parse_get_anchor_output,
+    parse_transaction_receipt,
     parse_transaction_hash,
 )
 from src.blockchain.config import BlockchainConfig
@@ -50,6 +52,31 @@ def test_parse_get_anchor_output():
         receipt_count=2,
         operator="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
         timestamp=1780000000,
+    )
+
+
+def test_parse_transaction_receipt():
+    output = f"""
+    {{
+      "status": "0x1",
+      "transactionHash": "{TX_HASH}",
+      "blockNumber": "0x2",
+      "blockTimestamp": 1780000000,
+      "gasUsed": "0x22d77",
+      "effectiveGasPrice": "0x347f5824"
+    }}
+    """
+
+    receipt = parse_transaction_receipt(output)
+
+    assert receipt == TransactionReceipt(
+        transaction_hash=TX_HASH,
+        block_number=2,
+        block_timestamp=1780000000,
+        gas_used=142711,
+        effective_gas_price=880760868,
+        transaction_fee_wei=142711 * 880760868,
+        status=1,
     )
 
 
@@ -120,4 +147,3 @@ def test_get_anchor_builds_cast_call_command():
             "http://127.0.0.1:8545",
         ]
     ]
-

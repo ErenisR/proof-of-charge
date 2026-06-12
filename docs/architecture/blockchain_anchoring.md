@@ -23,6 +23,14 @@ Local deployment:
 4. Publish a DB anchor with `python3 -m src.blockchain.publisher <day>`.
 5. Verify it with `python3 -m src.blockchain.verifier <day>`.
 
+Experiment integration:
+
+- `python3 -m src.run_experiment <n> --day <day> --publish-chain`
+- Publishes the generated run's DB batch anchor on-chain.
+- Stores the transaction hash in `batch_anchors.chain_tx`.
+- Adds `chain_gas_used`, `chain_effective_gas_price_wei`,
+  `chain_transaction_fee_wei`, and `chain_root_match` to `metrics.json`.
+
 The Docker Compose Anvil service is local-development infrastructure. It does
 not persist chain state by default; redeploy the contract after recreating the
 container.

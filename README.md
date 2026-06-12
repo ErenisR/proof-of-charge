@@ -279,6 +279,56 @@ python3 -m src.blockchain.publisher 2026-03-07 --prefix run-test
 python3 -m src.blockchain.verifier 2026-03-07 --prefix run-test
 ```
 
+The publisher prints transaction metrics and the experiment runner can include
+them in `results/<run_id>/metrics.json`:
+
+```text
+chain_tx
+chain_block_number
+chain_gas_used
+chain_effective_gas_price_wei
+chain_transaction_fee_wei
+chain_root_match
+```
+
+## End-To-End Blockchain Demo
+
+Start local infrastructure:
+
+```bash
+docker compose up -d postgres anvil
+python3 -m src.db init
+```
+
+Deploy the contract and copy the printed `ANCHOR_CONTRACT_ADDRESS` into `.env`:
+
+```bash
+python3 scripts/deploy_anchor.py
+```
+
+Run a reproducible experiment that also publishes the batch root on-chain:
+
+```bash
+python3 -m src.run_experiment 10 \
+  --day 2026-06-12 \
+  --seed 42 \
+  --run-id chain_demo_10 \
+  --skip-figures \
+  --publish-chain
+```
+
+Inspect the blockchain metrics:
+
+```bash
+cat results/chain_demo_10/metrics.json
+```
+
+Manually reverify the same on-chain anchor:
+
+```bash
+python3 -m src.blockchain.verifier 2026-06-12 --prefix chain_demo_10
+```
+
 Database relationship diagram:
 
 ```mermaid
@@ -547,6 +597,13 @@ This performs:
 ```text
 generate sessions -> build receipts -> save receipts -> anchor day ->
 verify batch -> export datasets -> generate figures -> snapshot results
+```
+
+Add `--publish-chain` to publish the generated batch root to the configured
+contract and include gas/transaction metrics in `metrics.json`:
+
+```bash
+python3 -m src.run_experiment 100 --day 2026-03-07 --seed 42 --publish-chain
 ```
 
 Skip figure generation for quick receipt/tamper demos:

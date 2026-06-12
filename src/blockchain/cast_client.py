@@ -26,6 +26,17 @@ class OnChainAnchor:
     timestamp: int
 
 
+@dataclass(frozen=True)
+class TransactionReceipt:
+    transaction_hash: str
+    block_number: int
+    block_timestamp: int | None
+    gas_used: int
+    effective_gas_price: int
+    transaction_fee_wei: int
+    status: int
+
+
 def default_cast_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, check=True, capture_output=True, text=True)
 
@@ -85,6 +96,23 @@ def get_anchor(
     return parse_get_anchor_output(_combined_output(result))
 
 
+def get_transaction_receipt(
+    config: BlockchainConfig,
+    tx_hash: str,
+    runner: CastRunner = default_cast_runner,
+) -> TransactionReceipt:
+    command = [
+        "cast",
+        "receipt",
+        tx_hash,
+        "--rpc-url",
+        config.rpc_url,
+        "--json",
+    ]
+    result = runner(command)
+    return parse_transaction_receipt(_combined_output(result))
+
+
 def normalize_bytes32(value: str) -> str:
     normalized = value.lower()
     if normalized.startswith("0x"):
@@ -134,9 +162,54 @@ def parse_get_anchor_output(output: str) -> OnChainAnchor:
     )
 
 
+def parse_transaction_receipt(output: str) -> TransactionReceipt:
+    try:
+        payload = json.loads(output.strip())
+    except json.JSONDecodeError as exc:
+        raise ValueError("Could not parse transaction receipt JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Transaction receipt JSON must be an object")
+
+    transaction_hash = payload.get("transactionHash")
+    if not isinstance(transaction_hash, str) or not _is_tx_hash(transaction_hash):
+        raise ValueError("Transaction receipt is missing transactionHash")
+
+    gas_used = _parse_int_field(payload, "gasUsed")
+    effective_gas_price = _parse_int_field(payload, "effectiveGasPrice")
+    block_number = _parse_int_field(payload, "blockNumber")
+    status = _parse_int_field(payload, "status")
+    block_timestamp = payload.get("blockTimestamp")
+    if block_timestamp is not None:
+        block_timestamp = _parse_int(block_timestamp)
+
+    return TransactionReceipt(
+        transaction_hash=transaction_hash,
+        block_number=block_number,
+        block_timestamp=block_timestamp,
+        gas_used=gas_used,
+        effective_gas_price=effective_gas_price,
+        transaction_fee_wei=gas_used * effective_gas_price,
+        status=status,
+    )
+
+
 def _combined_output(result: subprocess.CompletedProcess[str]) -> str:
     return "\n".join(part for part in (result.stdout, result.stderr) if part)
 
 
 def _is_tx_hash(value: str) -> bool:
     return bool(re.fullmatch(r"0x[a-fA-F0-9]{64}", value))
+
+
+def _parse_int_field(payload: dict, key: str) -> int:
+    if key not in payload:
+        raise ValueError(f"Transaction receipt is missing {key}")
+    return _parse_int(payload[key])
+
+
+def _parse_int(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return int(value, 16) if value.startswith("0x") else int(value)
+    raise ValueError(f"Expected integer-compatible value, got {value!r}")

@@ -12,6 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .batch_anchoring import anchor_day
+from .blockchain.publisher import publish_batch_anchor
+from .blockchain.verifier import verify_on_chain_anchor
 from .charts import generate_charts
 from . import db
 from .export import export_all
@@ -651,6 +653,7 @@ def run_experiment(
     bidirectional_ratio: float = 0.30,
     discharge_ratio: float = 0.15,
     skip_figures: bool = False,
+    publish_chain: bool = False,
 ) -> Dict[str, Any]:
     run_id = run_id or _default_run_id()
     run_dir = RESULTS_DIR / run_id
@@ -669,6 +672,11 @@ def run_experiment(
 
     batch_root, anchored_count = anchor_day(day, session_prefix=run_id)
     verify = verify_day(day, session_prefix=run_id)
+    chain_publish = None
+    chain_verify = None
+    if publish_chain:
+        chain_publish = publish_batch_anchor(day, session_prefix=run_id)
+        chain_verify = verify_on_chain_anchor(day, session_prefix=run_id)
 
     # Keep global exports up to date, then optionally render run-scoped charts.
     export_all()
@@ -696,6 +704,20 @@ def run_experiment(
         "receipt_count_verified": verify["receipt_count"],
         "datasets": dataset_counts,
     }
+    if chain_publish and chain_verify:
+        metrics.update(
+            {
+                "chain_tx": chain_publish["chain_tx"],
+                "chain_block_number": chain_publish["chain_block_number"],
+                "chain_block_timestamp": chain_publish["chain_block_timestamp"],
+                "chain_gas_used": chain_publish["chain_gas_used"],
+                "chain_effective_gas_price_wei": chain_publish["chain_effective_gas_price_wei"],
+                "chain_transaction_fee_wei": chain_publish["chain_transaction_fee_wei"],
+                "chain_status": chain_publish["chain_status"],
+                "chain_root_match": chain_verify["match"],
+                "chain_on_chain_receipt_count": chain_verify["on_chain_receipt_count"],
+            }
+        )
     _to_json(
         {
             "run_id": run_id,
@@ -709,6 +731,7 @@ def run_experiment(
                 "discharge_ratio": discharge_ratio,
                 "registry_path": str(registry_path) if registry_path else None,
                 "skip_figures": skip_figures,
+                "publish_chain": publish_chain,
             },
             "metrics": metrics,
             "session_ids": synth["session_ids"],
@@ -763,6 +786,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Skip chart generation and figure snapshot copying.",
     )
+    parser.add_argument(
+        "--publish-chain",
+        action="store_true",
+        help="Publish and verify the generated batch anchor on the configured blockchain.",
+    )
     args = parser.parse_args()
 
     result = run_experiment(
@@ -775,5 +803,6 @@ if __name__ == "__main__":
         bidirectional_ratio=args.bidirectional_ratio,
         discharge_ratio=args.discharge_ratio,
         skip_figures=args.skip_figures,
+        publish_chain=args.publish_chain,
     )
     print(json.dumps(result, indent=2, sort_keys=True))

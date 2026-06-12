@@ -11,11 +11,12 @@ from sqlalchemy.orm import Session
 from src import db
 from src.models import BatchAnchor
 
-from .cast_client import anchor_batch
+from .cast_client import TransactionReceipt, anchor_batch, get_transaction_receipt
 from .config import BlockchainConfig, load_blockchain_config
 
 
 AnchorSender = Callable[[BlockchainConfig, str, str | None, str, int], str]
+ReceiptReader = Callable[[BlockchainConfig, str], TransactionReceipt]
 
 
 def publish_batch_anchor(
@@ -26,6 +27,7 @@ def publish_batch_anchor(
     db_session: Session | None = None,
     config: BlockchainConfig | None = None,
     sender: AnchorSender = anchor_batch,
+    receipt_reader: ReceiptReader = get_transaction_receipt,
 ) -> dict[str, Any]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
@@ -49,6 +51,7 @@ def publish_batch_anchor(
             anchor.batch_root,
             anchor.receipt_count,
         )
+        receipt = receipt_reader(chain_config, tx_hash)
         anchor.chain_tx = tx_hash
         session.commit()
         return {
@@ -58,6 +61,12 @@ def publish_batch_anchor(
             "batch_root": anchor.batch_root,
             "receipt_count": anchor.receipt_count,
             "chain_tx": tx_hash,
+            "chain_block_number": receipt.block_number,
+            "chain_block_timestamp": receipt.block_timestamp,
+            "chain_gas_used": receipt.gas_used,
+            "chain_effective_gas_price_wei": receipt.effective_gas_price,
+            "chain_transaction_fee_wei": receipt.transaction_fee_wei,
+            "chain_status": receipt.status,
         }
     except Exception:
         session.rollback()
@@ -92,11 +101,11 @@ def main() -> int:
     result = publish_batch_anchor(args.day, session_prefix=args.prefix, force=args.force)
     print(
         f"[OK] anchor_id={result['anchor_id']} day={result['day']} "
-        f"tx={result['chain_tx']}"
+        f"tx={result['chain_tx']} gas={result['chain_gas_used']} "
+        f"fee_wei={result['chain_transaction_fee_wei']}"
     )
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
