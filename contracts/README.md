@@ -45,3 +45,15 @@ python3 scripts/deploy_anchor.py
 
 The script uses Anvil's first development account by default. Do not use that
 private key outside a local chain.
+
+## Tests
+
+Run the contract tests:
+
+```bash
+forge test
+```
+
+The tests cover owner-only anchoring, duplicate rejection, invalid inputs,
+missing-anchor reads, ownership transfer, and independent anchors per
+`day + sessionPrefix`.

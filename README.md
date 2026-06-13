@@ -660,6 +660,12 @@ Run the test suite with:
 .venv/bin/python -m pytest -q
 ```
 
+Run the Solidity contract tests with:
+
+```bash
+forge test
+```
+
 Current coverage focuses on:
 
 - deterministic receipt hashing
@@ -672,6 +678,7 @@ Current coverage focuses on:
 - DB audit detection for tampered receipt JSON and normalized receipt columns
 - SQLAlchemy persistence for sessions, meter values, and receipts
 - DB-backed CSV exports
+- Solidity contract behavior for owner-only batch-root anchoring
 
 ## Current Limitations
 
