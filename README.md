@@ -359,6 +359,29 @@ writes `metrics.json`, `chain.json`, `deploy_anchor.txt`,
 `chain_verification.txt`, and `report.md` under `results/<run_id>/`. It restores
 the pre-existing `exports/` directory after the run to avoid export file churn.
 
+For a scalability matrix workflow, run:
+
+```bash
+scripts/run_experiment_matrix.sh
+```
+
+The default sizes are `10 50 100 500 1000`. Pass explicit sizes as arguments:
+
+```bash
+scripts/run_experiment_matrix.sh 10 25 50
+```
+
+Set `PUBLISH_CHAIN=1` to publish each run's batch root to the configured local
+chain:
+
+```bash
+PUBLISH_CHAIN=1 scripts/run_experiment_matrix.sh 10 50 100
+```
+
+The script writes `summary.csv`, `summary.md`, `manifest.json`, and run-specific
+artifacts under `results/<matrix_id>/`. It also restores `exports/` after the
+run.
+
 Database relationship diagram:
 
 ```mermaid
