@@ -347,6 +347,18 @@ Manually reverify the same on-chain anchor:
 python3 -m src.blockchain.verifier 2026-06-12 --prefix chain_demo_10
 ```
 
+For a reproducible smoke workflow, run:
+
+```bash
+scripts/run_chain_smoke.sh 2 2026-06-13 chain_smoke_demo
+```
+
+The script starts local Docker services, initializes the DB, deploys a fresh
+local contract for the run, publishes the generated batch root, verifies it, and
+writes `metrics.json`, `chain.json`, `deploy_anchor.txt`,
+`chain_verification.txt`, and `report.md` under `results/<run_id>/`. It restores
+the pre-existing `exports/` directory after the run to avoid export file churn.
+
 Database relationship diagram:
 
 ```mermaid
