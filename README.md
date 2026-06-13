@@ -699,6 +699,22 @@ Batch verification may still pass after receipt JSON tampering because
 membership snapshot. This preserves what was anchored historically. Use
 `python3 -m src.verifier <session_id>` to detect modified receipt content.
 
+For a reproducible tamper workflow, run:
+
+```bash
+scripts/run_tamper_demo.sh
+```
+
+Or provide a run id:
+
+```bash
+scripts/run_tamper_demo.sh tamper_demo_case
+```
+
+The script writes `tamper_summary.json`, `tamper_summary.md`,
+`experiment_output.json`, and normal run artifacts under `results/<run_id>/`.
+It restores `exports/` after the run.
+
 ## Tests
 
 Run the test suite with:
