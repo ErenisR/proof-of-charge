@@ -326,6 +326,9 @@ Inspect the blockchain metrics:
 cat results/chain_demo_10/metrics.json
 ```
 
+An example formatted report is available at
+`docs/reports/blockchain_demo_20260612.md`.
+
 Manually reverify the same on-chain anchor:
 
 ```bash
