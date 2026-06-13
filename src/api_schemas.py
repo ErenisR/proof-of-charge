@@ -208,6 +208,35 @@ class AnchorResponse(BaseModel):
         )
 
 
+class ChainPublishResponse(BaseModel):
+    anchor_id: int
+    day: str
+    session_prefix: str
+    batch_root: str
+    receipt_count: int
+    chain_tx: str
+    chain_block_number: int
+    chain_block_timestamp: int | None
+    chain_gas_used: int
+    chain_effective_gas_price_wei: int
+    chain_transaction_fee_wei: int
+    chain_status: int
+
+
+class ChainVerifyResponse(BaseModel):
+    anchor_id: int
+    day: str
+    session_prefix: str
+    expected_root: str
+    computed_root: str
+    expected_receipt_count: int
+    on_chain_receipt_count: int
+    chain_tx: str | None
+    operator: str
+    on_chain_timestamp: int
+    match: bool
+
+
 class VerificationResponse(BaseModel):
     id: int
     session_id: str | None

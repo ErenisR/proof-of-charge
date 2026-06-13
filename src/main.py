@@ -8,6 +8,8 @@ from . import api_service, audit_service, db
 from .api_schemas import (
     AnchorResponse,
     AuditSessionResponse,
+    ChainPublishResponse,
+    ChainVerifyResponse,
     DbHealthResponse,
     FinalizeSessionRequest,
     FinalizeSessionResponse,
@@ -17,6 +19,8 @@ from .api_schemas import (
     SessionSummaryResponse,
     VerificationResponse,
 )
+from .blockchain.publisher import publish_batch_anchor_by_id
+from .blockchain.verifier import verify_on_chain_anchor_by_id
 from .receipt_builder import build_receipt, hash_receipt
 from .receipt_schema import DEFAULT_SCHEMA_VERSION, DEFAULT_SESSION_TYPE
 from .repository import persist_finalized_session
@@ -116,6 +120,32 @@ def list_anchors(
             day=day,
             session_prefix=session_prefix,
         )
+
+
+@app.post("/v1/anchors/{anchor_id}/publish-chain", response_model=ChainPublishResponse)
+def publish_anchor_chain(anchor_id: int, force: bool = False) -> ChainPublishResponse:
+    try:
+        return ChainPublishResponse(**publish_batch_anchor_by_id(anchor_id, force=force))
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 409 if "already has chain_tx" in detail else 404
+        raise HTTPException(status_code=status_code, detail=detail)
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Database operation failed") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+
+@app.post("/v1/anchors/{anchor_id}/verify-chain", response_model=ChainVerifyResponse)
+def verify_anchor_chain(anchor_id: int) -> ChainVerifyResponse:
+    try:
+        return ChainVerifyResponse(**verify_on_chain_anchor_by_id(anchor_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Database operation failed") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 @app.get("/v1/verifications", response_model=PaginatedResponse[VerificationResponse])

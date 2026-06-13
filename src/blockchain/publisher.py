@@ -44,30 +44,55 @@ def publish_batch_anchor(
                 "Use --force to republish."
             )
 
-        tx_hash = sender(
-            chain_config,
-            anchor.day,
-            anchor.session_prefix,
-            anchor.batch_root,
-            anchor.receipt_count,
+        result = _publish_anchor_row(
+            session=session,
+            anchor=anchor,
+            chain_config=chain_config,
+            sender=sender,
+            receipt_reader=receipt_reader,
         )
-        receipt = receipt_reader(chain_config, tx_hash)
-        anchor.chain_tx = tx_hash
         session.commit()
-        return {
-            "anchor_id": anchor.id,
-            "day": anchor.day,
-            "session_prefix": anchor.session_prefix,
-            "batch_root": anchor.batch_root,
-            "receipt_count": anchor.receipt_count,
-            "chain_tx": tx_hash,
-            "chain_block_number": receipt.block_number,
-            "chain_block_timestamp": receipt.block_timestamp,
-            "chain_gas_used": receipt.gas_used,
-            "chain_effective_gas_price_wei": receipt.effective_gas_price,
-            "chain_transaction_fee_wei": receipt.transaction_fee_wei,
-            "chain_status": receipt.status,
-        }
+        return result
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        if owns_session:
+            session.close()
+
+
+def publish_batch_anchor_by_id(
+    anchor_id: int,
+    *,
+    force: bool = False,
+    db_session: Session | None = None,
+    config: BlockchainConfig | None = None,
+    sender: AnchorSender = anchor_batch,
+    receipt_reader: ReceiptReader = get_transaction_receipt,
+) -> dict[str, Any]:
+    owns_session = db_session is None
+    session = db_session or db.session_scope()
+    chain_config = config or load_blockchain_config()
+
+    try:
+        anchor = session.get(BatchAnchor, anchor_id)
+        if not anchor:
+            raise ValueError(f"No DB batch anchor found for id {anchor_id}")
+        if anchor.chain_tx and not force:
+            raise ValueError(
+                f"Anchor {anchor.id} already has chain_tx={anchor.chain_tx}. "
+                "Use force=true to republish."
+            )
+
+        result = _publish_anchor_row(
+            session=session,
+            anchor=anchor,
+            chain_config=chain_config,
+            sender=sender,
+            receipt_reader=receipt_reader,
+        )
+        session.commit()
+        return result
     except Exception:
         session.rollback()
         raise
@@ -89,6 +114,39 @@ def _find_latest_anchor(
         .order_by(BatchAnchor.id.desc())
     )
     return session.scalar(stmt)
+
+
+def _publish_anchor_row(
+    session: Session,
+    anchor: BatchAnchor,
+    chain_config: BlockchainConfig,
+    sender: AnchorSender,
+    receipt_reader: ReceiptReader,
+) -> dict[str, Any]:
+    tx_hash = sender(
+        chain_config,
+        anchor.day,
+        anchor.session_prefix,
+        anchor.batch_root,
+        anchor.receipt_count,
+    )
+    receipt = receipt_reader(chain_config, tx_hash)
+    anchor.chain_tx = tx_hash
+    session.flush()
+    return {
+        "anchor_id": anchor.id,
+        "day": anchor.day,
+        "session_prefix": anchor.session_prefix,
+        "batch_root": anchor.batch_root,
+        "receipt_count": anchor.receipt_count,
+        "chain_tx": tx_hash,
+        "chain_block_number": receipt.block_number,
+        "chain_block_timestamp": receipt.block_timestamp,
+        "chain_gas_used": receipt.gas_used,
+        "chain_effective_gas_price_wei": receipt.effective_gas_price,
+        "chain_transaction_fee_wei": receipt.transaction_fee_wei,
+        "chain_status": receipt.status,
+    }
 
 
 def main() -> int:

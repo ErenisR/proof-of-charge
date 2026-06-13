@@ -37,22 +37,35 @@ def verify_on_chain_anchor(
             suffix = f" with prefix {session_prefix}" if session_prefix else ""
             raise ValueError(f"No DB batch anchor found for day {day}{suffix}")
 
-        on_chain = reader(chain_config, anchor.day, anchor.session_prefix)
-        result = {
-            "day": anchor.day,
-            "session_prefix": anchor.session_prefix,
-            "expected_root": anchor.batch_root,
-            "computed_root": on_chain.batch_root,
-            "expected_receipt_count": anchor.receipt_count,
-            "on_chain_receipt_count": on_chain.receipt_count,
-            "chain_tx": anchor.chain_tx,
-            "operator": on_chain.operator,
-            "on_chain_timestamp": on_chain.timestamp,
-            "match": (
-                anchor.batch_root.lower() == on_chain.batch_root.lower()
-                and anchor.receipt_count == on_chain.receipt_count
-            ),
-        }
+        result = _verify_anchor_row(anchor=anchor, chain_config=chain_config, reader=reader)
+        persist_verification_result(result, verification_type="on_chain_batch", db_session=session)
+        session.commit()
+        return result
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        if owns_session:
+            session.close()
+
+
+def verify_on_chain_anchor_by_id(
+    anchor_id: int,
+    *,
+    db_session: Session | None = None,
+    config: BlockchainConfig | None = None,
+    reader: AnchorReader = get_anchor,
+) -> dict[str, Any]:
+    owns_session = db_session is None
+    session = db_session or db.session_scope()
+    chain_config = config or load_blockchain_config()
+
+    try:
+        anchor = session.get(BatchAnchor, anchor_id)
+        if not anchor:
+            raise ValueError(f"No DB batch anchor found for id {anchor_id}")
+
+        result = _verify_anchor_row(anchor=anchor, chain_config=chain_config, reader=reader)
         persist_verification_result(result, verification_type="on_chain_batch", db_session=session)
         session.commit()
         return result
@@ -79,6 +92,30 @@ def _find_latest_anchor(
     return session.scalar(stmt)
 
 
+def _verify_anchor_row(
+    anchor: BatchAnchor,
+    chain_config: BlockchainConfig,
+    reader: AnchorReader,
+) -> dict[str, Any]:
+    on_chain = reader(chain_config, anchor.day, anchor.session_prefix)
+    return {
+        "anchor_id": anchor.id,
+        "day": anchor.day,
+        "session_prefix": anchor.session_prefix,
+        "expected_root": anchor.batch_root,
+        "computed_root": on_chain.batch_root,
+        "expected_receipt_count": anchor.receipt_count,
+        "on_chain_receipt_count": on_chain.receipt_count,
+        "chain_tx": anchor.chain_tx,
+        "operator": on_chain.operator,
+        "on_chain_timestamp": on_chain.timestamp,
+        "match": (
+            anchor.batch_root.lower() == on_chain.batch_root.lower()
+            and anchor.receipt_count == on_chain.receipt_count
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify a DB batch anchor against the blockchain.")
     parser.add_argument("day", help="Day in YYYY-MM-DD format")
@@ -102,4 +139,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

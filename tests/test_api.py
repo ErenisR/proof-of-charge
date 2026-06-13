@@ -161,6 +161,89 @@ def test_get_receipt_anchors_and_verifications(monkeypatch):
     assert verifications["items"][0]["match"] is True
 
 
+def test_publish_anchor_chain(monkeypatch):
+    _prepare_api_db(monkeypatch)
+
+    def publish(anchor_id, force=False):
+        return {
+            "anchor_id": anchor_id,
+            "day": "2026-03-07",
+            "session_prefix": "api-session",
+            "batch_root": "0xbatchroot",
+            "receipt_count": 1,
+            "chain_tx": "0x" + "a" * 64,
+            "chain_block_number": 12,
+            "chain_block_timestamp": 1780000000,
+            "chain_gas_used": 142675,
+            "chain_effective_gas_price_wei": 771713212,
+            "chain_transaction_fee_wei": 110104182522100,
+            "chain_status": 1,
+        }
+
+    monkeypatch.setattr(main, "publish_batch_anchor_by_id", publish)
+
+    response = main.publish_anchor_chain(1).model_dump()
+
+    assert response["anchor_id"] == 1
+    assert response["chain_tx"] == "0x" + "a" * 64
+    assert response["chain_gas_used"] == 142675
+
+
+def test_publish_anchor_chain_conflict(monkeypatch):
+    _prepare_api_db(monkeypatch)
+
+    def publish(anchor_id, force=False):
+        raise ValueError("Anchor 1 already has chain_tx=0xabc. Use force=true to republish.")
+
+    monkeypatch.setattr(main, "publish_batch_anchor_by_id", publish)
+
+    with pytest.raises(HTTPException) as exc:
+        main.publish_anchor_chain(1)
+
+    assert exc.value.status_code == 409
+
+
+def test_verify_anchor_chain(monkeypatch):
+    _prepare_api_db(monkeypatch)
+
+    def verify(anchor_id):
+        return {
+            "anchor_id": anchor_id,
+            "day": "2026-03-07",
+            "session_prefix": "api-session",
+            "expected_root": "0xbatchroot",
+            "computed_root": "0xbatchroot",
+            "expected_receipt_count": 1,
+            "on_chain_receipt_count": 1,
+            "chain_tx": "0x" + "a" * 64,
+            "operator": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "on_chain_timestamp": 1780000000,
+            "match": True,
+        }
+
+    monkeypatch.setattr(main, "verify_on_chain_anchor_by_id", verify)
+
+    response = main.verify_anchor_chain(1).model_dump()
+
+    assert response["anchor_id"] == 1
+    assert response["match"] is True
+    assert response["operator"] == "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+
+
+def test_verify_anchor_chain_missing_returns_404(monkeypatch):
+    _prepare_api_db(monkeypatch)
+
+    def verify(anchor_id):
+        raise ValueError(f"No DB batch anchor found for id {anchor_id}")
+
+    monkeypatch.setattr(main, "verify_on_chain_anchor_by_id", verify)
+
+    with pytest.raises(HTTPException) as exc:
+        main.verify_anchor_chain(999)
+
+    assert exc.value.status_code == 404
+
+
 def test_audit_session(monkeypatch):
     _prepare_api_db(monkeypatch)
 

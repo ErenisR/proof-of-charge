@@ -155,6 +155,8 @@ GET  /v1/sessions
 GET  /v1/sessions/{session_id}
 GET  /v1/receipts/{session_id}
 GET  /v1/anchors
+POST /v1/anchors/{anchor_id}/publish-chain
+POST /v1/anchors/{anchor_id}/verify-chain
 GET  /v1/verifications
 POST /v1/audit/sessions/{session_id}
 ```
@@ -293,6 +295,16 @@ chain_effective_gas_price_wei
 chain_transaction_fee_wei
 chain_root_match
 ```
+
+The same publish/verify flow is also exposed through the API:
+
+```text
+POST /v1/anchors/{anchor_id}/publish-chain
+POST /v1/anchors/{anchor_id}/verify-chain
+```
+
+Use `force=true` with the publish endpoint only when intentionally republishing
+an anchor that already has `chain_tx`.
 
 ## End-To-End Blockchain Demo
 
