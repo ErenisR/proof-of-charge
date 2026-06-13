@@ -8,8 +8,9 @@ exports datasets and figures for research or thesis material.
 The current development workflow is Postgres-first: Postgres is the source of
 truth for finalized sessions, receipts, batch anchors, batch memberships,
 verifications, and exported query data. Local receipt JSON files are legacy
-migration/debug artifacts only. Blockchain transactions and IPFS CIDs are
-represented as placeholders for now.
+migration/debug artifacts only. Blockchain batch-root anchoring is supported
+for local development through Foundry/Anvil, while IPFS CIDs remain placeholders
+for now.
 
 ## What It Does
 
@@ -20,8 +21,10 @@ represented as placeholders for now.
 - Supports `charge_only`, `discharge_only`, and `bidirectional` synthetic
   sessions.
 - Stores finalized sessions and receipts in Postgres.
-- Creates mock daily batch anchors from receipt hashes.
-- Verifies that stored batch roots match recomputed Merkle roots.
+- Creates daily batch anchors from receipt hashes.
+- Publishes batch roots to a local Anvil blockchain contract.
+- Verifies that stored batch roots match recomputed Merkle roots and on-chain
+  roots.
 - Exports CSV datasets and PNG figures under `exports/`.
 - Runs reproducible synthetic experiments under `results/<run_id>/`.
 
@@ -671,8 +674,9 @@ Current coverage focuses on:
 
 - Legacy file-based JSON storage remains available only for migration/debug
   fallback paths.
-- Batch anchoring is local/mock only.
-- `chain_tx` and `cid` are placeholders for future blockchain/IPFS integration.
+- Blockchain anchoring currently targets local Anvil development and still needs
+  testnet deployment hardening.
+- `cid` is a placeholder for future IPFS integration.
 - Synthetic sessions simulate charging behavior; there is no live OCPP charger
   integration yet.
 - Dependencies are listed in `requirements.txt` but not pinned yet.
