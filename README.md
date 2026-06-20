@@ -27,6 +27,8 @@ for now.
   roots.
 - Exports CSV datasets and PNG figures under `exports/`.
 - Runs reproducible synthetic experiments under `results/<run_id>/`.
+- Provides research workflows for scalability matrices, local blockchain
+  anchoring evidence, and tamper-detection demonstrations.
 
 ## Project Structure
 
@@ -379,8 +381,19 @@ PUBLISH_CHAIN=1 scripts/run_experiment_matrix.sh 10 50 100
 ```
 
 The script writes `summary.csv`, `summary.md`, `manifest.json`, and run-specific
-artifacts under `results/<matrix_id>/`. It also restores `exports/` after the
+artifacts under `results/<matrix_id>/`. It also generates publication-oriented
+figures under `results/<matrix_id>/figures/` and restores `exports/` after the
 run.
+
+The default session modes are `charge_only discharge_only bidirectional all`.
+Override them with `MODES`:
+
+```bash
+MODES="charge_only bidirectional" scripts/run_experiment_matrix.sh 10 50 100
+```
+
+See `docs/reports/research_experiments.md` for the full research workflow,
+metric definitions, output layout, and paper artifact guidance.
 
 Database relationship diagram:
 
@@ -714,6 +727,10 @@ scripts/run_tamper_demo.sh tamper_demo_case
 The script writes `tamper_summary.json`, `tamper_summary.md`,
 `experiment_output.json`, and normal run artifacts under `results/<run_id>/`.
 It restores `exports/` after the run.
+
+The tamper summary records the modified field, original and tampered values,
+before/after receipt verification, before/after audit status, and whether the
+expected tamper detection occurred.
 
 ## Tests
 

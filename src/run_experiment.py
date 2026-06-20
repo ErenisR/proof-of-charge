@@ -21,6 +21,7 @@ from .models import BatchAnchor, BatchAnchorReceipt, ChargingSession, MeterValue
 from .repository import persist_finalized_session
 from .receipt_builder import build_receipt, hash_receipt
 from .receipt_schema import SESSION_TYPE_ORDER
+from .session_validation import summarize_session_metrics, summarize_validation, validate_session_receipt
 from .storage import BASE_DIR, load_index, save_receipt, write_local_receipts_enabled
 from .synthetic_sessions import _load_registry, generate_session
 from .verifier_batch import verify_day
@@ -208,6 +209,8 @@ def _finalize_synthetic_sessions(
     rng = random.Random(seed)
     base_now = _day_end(day)
     session_ids: List[str] = []
+    records: List[Dict[str, Any]] = []
+    validation_failures: Dict[str, List[str]] = {}
 
     t0 = time.perf_counter()
     for i in range(1, num_sessions + 1):
@@ -224,6 +227,11 @@ def _finalize_synthetic_sessions(
         )
         receipt = build_receipt(session)
         receipt_hash = hash_receipt(receipt)
+        records.append({"session": session, "receipt": receipt, "receipt_hash": receipt_hash})
+        failures = validate_session_receipt(session, receipt, receipt_hash)
+        if session["session_id"] in validation_failures:
+            failures.append("duplicate_session_id")
+        validation_failures[session["session_id"]] = failures
         db_enabled = db.database_enabled()
         if db_enabled:
             persist_finalized_session(session, receipt, receipt_hash)
@@ -236,6 +244,8 @@ def _finalize_synthetic_sessions(
         "session_ids": session_ids,
         "t_finalize_total": t1 - t0,
         "t_finalize_avg": (t1 - t0) / num_sessions if num_sessions else 0,
+        "session_metrics": summarize_session_metrics(records),
+        "validation": summarize_validation(validation_failures),
     }
 
 
@@ -695,13 +705,16 @@ def run_experiment(
         "run_id": run_id,
         "day": day,
         "seed": seed,
+        "session_type_mode": session_type,
         "num_sessions_requested": num_sessions,
+        **synth["session_metrics"],
         "num_sessions_anchored": anchored_count,
         "t_finalize_total_sec": round(synth["t_finalize_total"], 6),
         "t_finalize_avg_sec": round(synth["t_finalize_avg"], 6),
         "batch_root": batch_root,
         "batch_root_match": verify["match"],
         "receipt_count_verified": verify["receipt_count"],
+        **synth["validation"],
         "datasets": dataset_counts,
     }
     if chain_publish and chain_verify:

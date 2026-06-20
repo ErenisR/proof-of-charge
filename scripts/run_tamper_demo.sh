@@ -68,19 +68,33 @@ import json
 import sys
 from pathlib import Path
 
-from src import audit_service, tamper, verifier, verifier_batch
+from src import audit_service, db, tamper, verifier, verifier_batch
+from src.models import Receipt
 
 run_dir = Path(sys.argv[1])
 session_id = sys.argv[2]
 day = sys.argv[3]
 run_id = sys.argv[4]
 delta_kwh = float(sys.argv[5])
+tampered_field = "energy_kwh"
+
+def receipt_field_value():
+    session = db.session_scope()
+    try:
+        receipt = session.get(Receipt, session_id)
+        if not receipt:
+            raise ValueError(f"Receipt not found: {session_id}")
+        return (receipt.receipt_json or {}).get(tampered_field)
+    finally:
+        session.close()
 
 clean_receipt = verifier.verify_session_details(session_id)
 clean_audit = audit_service.audit_session(session_id)
 clean_batch = verifier_batch.verify_day(day, session_prefix=run_id)
+original_value = receipt_field_value()
 
 tamper_result = tamper.tamper_receipt(session_id, delta_kwh=delta_kwh)
+tampered_value = receipt_field_value()
 
 tampered_receipt = verifier.verify_session_details(session_id)
 tampered_audit = audit_service.audit_session(session_id)
@@ -90,7 +104,17 @@ summary = {
     "run_id": run_id,
     "day": day,
     "session_id": session_id,
+    "tampered_session_id": session_id,
+    "tampered_field": tampered_field,
+    "original_value": original_value,
+    "tampered_value": tampered_value,
     "delta_kwh": delta_kwh,
+    "receipt_verification_match_before": clean_receipt["match"],
+    "receipt_verification_match_after": tampered_receipt["match"],
+    "audit_passed_before": clean_audit["match"],
+    "audit_passed_after": tampered_audit["match"],
+    "expected_detection": True,
+    "actual_detection": (not tampered_receipt["match"]) and (not tampered_audit["match"]),
     "clean_receipt_match": clean_receipt["match"],
     "clean_audit_match": clean_audit["match"],
     "clean_batch_match": clean_batch["match"],
@@ -129,7 +153,7 @@ Session ID: `{session_id}`
 Tamper operation:
 
 ```text
-receipt_json.energy_kwh += {delta_kwh}
+receipt_json.{tampered_field}: {original_value} -> {tampered_value}
 ```
 
 ## Before Tampering
