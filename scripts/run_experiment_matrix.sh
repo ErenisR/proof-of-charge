@@ -211,6 +211,16 @@ manifest = {
 def fmt(value):
     return "" if value is None else str(value)
 
+def display_mode(mode):
+    labels = {
+        "charge_only": "Charge-only",
+        "discharge_only": "Discharge-only",
+        "bidirectional": "Bidirectional",
+        "all": "Mixed",
+        "auto": "Auto mix",
+    }
+    return labels.get(str(mode), str(mode).replace("_", " ").title())
+
 lines = [
     f"# Experiment Matrix Report - {day}",
     "",
@@ -233,6 +243,7 @@ lines = [
 ]
 for row in rows:
     values = {key: fmt(value) for key, value in row.items()}
+    values["session_type_mode"] = display_mode(row["session_type_mode"])
     lines.append(
         "| {run_id} | {session_type_mode} | {sessions} | {meter_values} | {finalization_total_sec} | "
         "{finalization_avg_sec} | {batch_root_match} | {validation_failure_count} | "
@@ -257,74 +268,137 @@ lines.extend(
 def by_mode(mode):
     return [row for row in rows if row["session_type_mode"] == mode]
 
-def plot_line(filename, y_key, ylabel, title):
-    plt.figure(figsize=(7, 4))
+def numeric(value):
+    if value in (None, ""):
+        return None
+    return float(value)
+
+plt.rcParams.update(
+    {
+        "figure.dpi": 140,
+        "savefig.dpi": 300,
+        "font.size": 10,
+        "axes.titlesize": 11,
+        "axes.labelsize": 10,
+        "legend.fontsize": 9,
+    }
+)
+
+def plot_line(filename, y_key, ylabel, title, transform=None):
+    plt.figure(figsize=(7.2, 4.2))
     for mode in modes:
-        subset = by_mode(mode)
-        x = [row["workload_size"] for row in subset]
-        y = [row.get(y_key) for row in subset]
-        plt.plot(x, y, marker="o", label=mode)
-    plt.xlabel("Sessions")
+        subset = sorted(by_mode(mode), key=lambda row: row["workload_size"])
+        x = []
+        y = []
+        for row in subset:
+            value = numeric(row.get(y_key))
+            if value is None:
+                continue
+            x.append(row["workload_size"])
+            y.append(transform(value, row) if transform else value)
+        if not x:
+            continue
+        plt.plot(x, y, marker="o", linewidth=1.8, markersize=4.5, label=display_mode(mode))
+    plt.xlabel("Receipts in batch")
     plt.ylabel(ylabel)
     plt.title(title)
     plt.grid(True, alpha=0.3)
-    plt.legend()
+    if len(modes) > 1:
+        plt.legend(frameon=False)
     plt.tight_layout()
-    plt.savefig(figures_dir / filename, dpi=200)
+    plt.savefig(figures_dir / filename)
     plt.close()
 
-plot_line("finalization_time_vs_sessions.png", "finalization_total_sec", "Total finalization time (s)", "Finalization Time vs Sessions")
-plot_line("average_finalization_time_vs_sessions.png", "finalization_avg_sec", "Average finalization time (s)", "Average Finalization Time vs Sessions")
-plot_line("meter_values_vs_sessions.png", "meter_values", "Meter values", "Meter Values vs Sessions")
+plot_line(
+    "finalization_time_vs_sessions.png",
+    "finalization_total_sec",
+    "Receipt finalization time (s)",
+    "Receipt Finalization Time by Batch Size",
+)
+plot_line(
+    "average_finalization_time_vs_sessions.png",
+    "finalization_avg_sec",
+    "Average finalization time (ms/receipt)",
+    "Average Receipt Finalization Cost",
+    transform=lambda value, row: value * 1000,
+)
+plot_line(
+    "finalization_throughput_vs_sessions.png",
+    "finalization_total_sec",
+    "Receipt finalization throughput (receipts/s)",
+    "Receipt Finalization Throughput",
+    transform=lambda value, row: (row["workload_size"] / value) if value else 0,
+)
+plot_line(
+    "meter_values_vs_sessions.png",
+    "meter_values",
+    "Meter-value rows",
+    "Meter-Value Rows by Batch Size",
+)
 
-plt.figure(figsize=(7, 4))
+plt.figure(figsize=(7.2, 4.2))
 last_rows = [row for row in rows if row["workload_size"] == max(int(size) for size in sizes)]
-x_labels = [row["session_type_mode"] for row in last_rows]
+x_labels = [display_mode(row["session_type_mode"]) for row in last_rows]
 bottom = [0] * len(last_rows)
 for key, label in [
-    ("charge_only_sessions", "charge only"),
-    ("discharge_only_sessions", "discharge only"),
-    ("bidirectional_sessions", "bidirectional"),
+    ("charge_only_sessions", "Charge-only"),
+    ("discharge_only_sessions", "Discharge-only"),
+    ("bidirectional_sessions", "Bidirectional"),
 ]:
     values = [row.get(key) or 0 for row in last_rows]
     plt.bar(x_labels, values, bottom=bottom, label=label)
     bottom = [a + b for a, b in zip(bottom, values)]
-plt.ylabel("Sessions")
-plt.title("Session Type Distribution")
-plt.legend()
+plt.ylabel("Receipts")
+plt.title("Session-Type Composition at Largest Batch Size")
+plt.legend(frameon=False)
 plt.tight_layout()
-plt.savefig(figures_dir / "session_type_distribution.png", dpi=200)
+plt.savefig(figures_dir / "session_type_distribution.png")
 plt.close()
 
-plt.figure(figsize=(7, 4))
+plt.figure(figsize=(7.2, 4.2))
 width = 0.25
 x = list(range(len(last_rows)))
 for offset, key, label in [
-    (-width, "import_kwh_avg", "import"),
-    (0, "export_kwh_avg", "export"),
-    (width, "net_kwh_avg", "net"),
+    (-width, "import_kwh_avg", "Import"),
+    (0, "export_kwh_avg", "Export"),
+    (width, "net_kwh_avg", "Net"),
 ]:
     plt.bar([value + offset for value in x], [row.get(key) or 0 for row in last_rows], width=width, label=label)
 plt.xticks(x, x_labels)
-plt.ylabel("Average kWh")
-plt.title("Average Import, Export, and Net Energy")
-plt.legend()
+plt.ylabel("Average energy per receipt (kWh)")
+plt.title("V2G Energy Balance by Session Mode")
+plt.axhline(0, color="black", linewidth=0.8, alpha=0.5)
+plt.legend(frameon=False)
 plt.tight_layout()
-plt.savefig(figures_dir / "energy_import_export_net_summary.png", dpi=200)
+plt.savefig(figures_dir / "energy_import_export_net_summary.png")
 plt.close()
 
 if publish_chain and any(row.get("chain_gas_used") for row in rows):
-    plot_line("blockchain_gas_vs_sessions.png", "chain_gas_used", "Gas used", "Blockchain Gas vs Sessions")
+    plot_line(
+        "blockchain_gas_vs_sessions.png",
+        "chain_gas_used",
+        "Gas used per batch anchor",
+        "Blockchain Gas per Anchored Batch",
+    )
+    plot_line(
+        "blockchain_gas_per_session_vs_sessions.png",
+        "chain_gas_used",
+        "Gas used per receipt",
+        "Amortized Blockchain Gas per Receipt",
+        transform=lambda value, row: value / row["workload_size"] if row["workload_size"] else 0,
+    )
 
 captions = [
-    "- finalization_time_vs_sessions.png: Total receipt finalization time by workload size and session mode.",
-    "- average_finalization_time_vs_sessions.png: Average per-session finalization time by workload size and session mode.",
-    "- meter_values_vs_sessions.png: Meter stream rows generated for each workload size and session mode.",
-    "- session_type_distribution.png: Session-type composition at the largest workload size.",
-    "- energy_import_export_net_summary.png: Average import, export, and net energy at the largest workload size.",
+    "- finalization_time_vs_sessions.png: Total receipt finalization time in seconds by batch size and session-generation mode.",
+    "- average_finalization_time_vs_sessions.png: Average receipt finalization latency in milliseconds per receipt.",
+    "- finalization_throughput_vs_sessions.png: Receipt finalization throughput in receipts per second.",
+    "- meter_values_vs_sessions.png: Number of generated meter-value rows by batch size.",
+    "- session_type_distribution.png: Session-type composition at the largest tested batch size. The `Mixed` mode corresponds to the raw `all` mode.",
+    "- energy_import_export_net_summary.png: Average import, export, and net energy per receipt at the largest tested batch size.",
 ]
 if publish_chain and any(row.get("chain_gas_used") for row in rows):
-    captions.append("- blockchain_gas_vs_sessions.png: Gas used to anchor one batch root per run.")
+    captions.append("- blockchain_gas_vs_sessions.png: Gas used to anchor one Merkle batch root per run.")
+    captions.append("- blockchain_gas_per_session_vs_sessions.png: Amortized gas per receipt when one batch root covers multiple receipts.")
 (figures_dir / "captions.md").write_text("\n".join(captions) + "\n", encoding="utf-8")
 PY
 

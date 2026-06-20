@@ -59,10 +59,12 @@ results/<matrix_id>/
     captions.md
     finalization_time_vs_sessions.png
     average_finalization_time_vs_sessions.png
+    finalization_throughput_vs_sessions.png
     meter_values_vs_sessions.png
     session_type_distribution.png
     energy_import_export_net_summary.png
     blockchain_gas_vs_sessions.png
+    blockchain_gas_per_session_vs_sessions.png
   runs/
     <run_id>/
       metrics.json
@@ -71,7 +73,7 @@ results/<matrix_id>/
       datasets/*.csv
 ```
 
-`blockchain_gas_vs_sessions.png` is generated only when chain metrics exist.
+The blockchain gas figures are generated only when chain metrics exist.
 
 ## Matrix Metrics
 
@@ -215,6 +217,19 @@ tamper-detection mechanisms for modified receipt content.
 Use `summary.csv` for tables and `figures/*.png` for plots. Cite the run
 configuration from `manifest.json`, especially the seed, session sizes, session
 modes, and blockchain publishing flag.
+
+For paper text, refer to raw mode `all` as `mixed`. The generated figures
+already display it as `Mixed`.
+
+Recommended figure usage:
+
+- `finalization_time_vs_sessions.png`: scalability of total receipt processing
+- `average_finalization_time_vs_sessions.png`: per-receipt latency
+- `finalization_throughput_vs_sessions.png`: receipt throughput
+- `energy_import_export_net_summary.png`: V2G import/export/net-energy evidence
+- `blockchain_gas_vs_sessions.png`: per-batch anchoring overhead
+- `blockchain_gas_per_session_vs_sessions.png`: amortized blockchain overhead
+  per receipt
 
 For a blockchain-backed result, include:
 
