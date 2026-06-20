@@ -91,6 +91,74 @@ The matrix summary includes:
 The per-run `metrics.json` also stores validation details, session duration
 statistics, and energy statistics.
 
+## Reproducibility Check
+
+Run:
+
+```bash
+scripts/run_reproducibility_check.sh 100
+```
+
+Optional environment variables:
+
+- `DAY`: experiment day
+- `SEED`: deterministic synthetic-session seed
+- `SESSION_TYPE`: `charge_only`, `discharge_only`, `bidirectional`, `all`, or
+  `auto`
+- `RUN_ID`: result directory name
+
+The workflow runs the same synthetic workload twice using the same stable
+internal session prefix. It compares:
+
+- batch root
+- receipt hash sequence
+- receipt Merkle root sequence
+- sessions CSV
+- meter values CSV
+- receipts CSV
+- anchors CSV
+- validation failure counts
+
+Outputs:
+
+```text
+results/<run_id>/
+  reproducibility_summary.csv
+  reproducibility_summary.json
+  reproducibility_summary.md
+  attempt_a/
+  attempt_b/
+```
+
+Use this as evidence for deterministic Proof-of-Charge generation. The strongest
+paper table is the check table from `reproducibility_summary.md`.
+
+## Blockchain Cost Interpretation
+
+After running a matrix with `PUBLISH_CHAIN=1`, generate the cost report:
+
+```bash
+python3 scripts/analyze_blockchain_cost.py results/<matrix_id>
+```
+
+Outputs:
+
+```text
+results/<matrix_id>/
+  blockchain_cost_summary.csv
+  blockchain_cost_summary.json
+  blockchain_cost_interpretation.md
+```
+
+This report distinguishes two claims:
+
+- total gas is expected to remain approximately constant per anchored batch
+- gas per session should decrease as more receipts are covered by the same
+  batch root
+
+This supports the design choice to anchor one Merkle batch root instead of
+submitting one blockchain transaction per receipt.
+
 ## Tamper Demo
 
 Run:

@@ -361,6 +361,17 @@ writes `metrics.json`, `chain.json`, `deploy_anchor.txt`,
 `chain_verification.txt`, and `report.md` under `results/<run_id>/`. It restores
 the pre-existing `exports/` directory after the run to avoid export file churn.
 
+For a deterministic replay check, run:
+
+```bash
+scripts/run_reproducibility_check.sh 100
+```
+
+The script runs the same synthetic workload twice with the same seed, day,
+session mode, and stable session prefix. It writes
+`reproducibility_summary.csv`, `reproducibility_summary.json`, and
+`reproducibility_summary.md` under `results/<run_id>/`.
+
 For a scalability matrix workflow, run:
 
 ```bash
@@ -379,6 +390,16 @@ chain:
 ```bash
 PUBLISH_CHAIN=1 scripts/run_experiment_matrix.sh 10 50 100
 ```
+
+After a blockchain-enabled matrix, generate a cost interpretation report:
+
+```bash
+python3 scripts/analyze_blockchain_cost.py results/<matrix_id>
+```
+
+This writes `blockchain_cost_summary.csv`,
+`blockchain_cost_summary.json`, and `blockchain_cost_interpretation.md` into the
+matrix directory.
 
 The script writes `summary.csv`, `summary.md`, `manifest.json`, and run-specific
 artifacts under `results/<matrix_id>/`. It also generates publication-oriented
