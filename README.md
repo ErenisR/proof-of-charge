@@ -715,6 +715,29 @@ Example with explicit run ID:
 python3 -m src.run_experiment 100 --day 2026-03-07 --seed 42 --run-id demo_100
 ```
 
+### Anchor Strategy Comparison
+
+Run the batch-vs-per-receipt anchoring experiment:
+
+```bash
+python3 scripts/run_anchor_strategy_comparison.py \
+  --sessions 10 50 100 250 500 1000 \
+  --day 2026-06-20 \
+  --seed 42 \
+  --session-type-mode all \
+  --deploy-contract \
+  --rpc-url http://127.0.0.1:8545 \
+  --private-key <ANVIL_PRIVATE_KEY> \
+  --output-dir results
+```
+
+The script writes `summary.csv`, `summary.md`, `metrics.json`,
+`manifest.json`, and comparison figures under
+`results/anchor_strategy_comparison_<timestamp>/`. Use `--dry-run` to generate
+the deterministic workload and output schema without publishing transactions.
+The per-receipt baseline reuses the existing `anchorBatch` contract method with
+one unique prefix per receipt and `receiptCount=1`.
+
 ## Tamper Demo
 
 Modify a stored receipt to test verification behavior:
