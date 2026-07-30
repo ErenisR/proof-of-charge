@@ -68,6 +68,12 @@ def _normalize_meter_values(mvs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return mvs_sorted
 
 
+def meter_leaf_bytes(meter_value: Dict[str, Any]) -> bytes:
+    """Canonical meter leaf encoding shared by receipt construction and DB audit."""
+    mv = _coerce_meter_value(meter_value)
+    return f'{mv["ts"]}|{mv["import_kwh"]}|{mv["export_kwh"]}'.encode("utf-8")
+
+
 def _pricing_components(pricing: Dict[str, Any]) -> List[Dict[str, Any]]:
     return (
         pricing.get("import_components")
@@ -155,10 +161,7 @@ def build_receipt(session: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("Need at least 2 meter values")
 
     # Build Merkle tree leaves as H(ts|import_kwh|export_kwh)
-    leaves = []
-    for mv in mvs:
-        leaf_str = f'{mv["ts"]}|{mv["import_kwh"]}|{mv["export_kwh"]}'
-        leaves.append(leaf_str.encode("utf-8"))
+    leaves = [meter_leaf_bytes(mv) for mv in mvs]
 
     root = merkle_root(leaves)
     first = mvs[0]

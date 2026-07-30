@@ -8,12 +8,14 @@ from . import db
 from .models import ChargingSession, Receipt
 from .receipt_builder import build_receipt, hash_receipt
 from .repository import persist_verification_result
+from .meter_verifier import verify_meter_stream_from_db
 
 
 def audit_session(
     session_id: str,
     db_session: Session | None = None,
     persist_result: bool = True,
+    verify_normalized_meter_rows: bool = True,
 ) -> dict[str, Any]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
@@ -34,12 +36,21 @@ def audit_session(
         hash_match = rebuilt_hash == receipt_row.receipt_hash
         stored_json_hash_match = stored_receipt_hash == receipt_row.receipt_hash
         normalized_match = not normalized_mismatches
+        meter_verification = (
+            verify_meter_stream_from_db(
+                session_id, db_session=session, persist_result=False
+            )
+            if verify_normalized_meter_rows
+            else None
+        )
+        meter_rows_match = meter_verification["match"] if meter_verification else None
         audit_ok = all(
             [
                 receipt_json_match,
                 hash_match,
                 stored_json_hash_match,
                 normalized_match,
+                meter_rows_match is not False,
             ]
         )
 
@@ -55,6 +66,8 @@ def audit_session(
             "rebuilt_hash": rebuilt_hash,
             "stored_receipt_json_hash": stored_receipt_hash,
             "normalized_mismatches": normalized_mismatches,
+            "normalized_meter_stream": meter_verification,
+            "normalized_meter_rows_match": meter_rows_match,
         }
         if persist_result:
             persist_verification_result(

@@ -99,6 +99,7 @@ def verify_day_from_db(
     day: str,
     session_prefix: str | None = None,
     db_session: Session | None = None,
+    persist_result: bool = True,
 ) -> Dict[str, Any]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
@@ -117,20 +118,29 @@ def verify_day_from_db(
             raise ValueError(f"No receipt memberships found for anchor {anchor.id}")
         computed_root = build_batch_root(receipt_hashes)
         expected_root = anchor.batch_root
+        root_match = computed_root == expected_root
+        count_match = len(receipt_hashes) == anchor.receipt_count
         result = {
             "day": day,
             "session_prefix": session_prefix,
             "expected_root": expected_root,
             "computed_root": computed_root,
-            "match": computed_root == expected_root,
+            "root_match": root_match,
+            "expected_receipt_count": anchor.receipt_count,
+            "actual_membership_count": len(receipt_hashes),
+            "receipt_count_match": count_match,
+            "match": root_match and count_match,
             "receipt_count": len(receipt_hashes),
             "session_ids": session_ids,
         }
-        persist_batch_verification(result, db_session=session)
-        session.commit()
+        if persist_result:
+            persist_batch_verification(result, db_session=session)
+            if owns_session:
+                session.commit()
         return result
     except Exception:
-        session.rollback()
+        if owns_session:
+            session.rollback()
         raise
     finally:
         if owns_session:

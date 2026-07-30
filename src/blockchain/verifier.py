@@ -26,6 +26,7 @@ def verify_on_chain_anchor(
     db_session: Session | None = None,
     config: BlockchainConfig | None = None,
     reader: AnchorReader = get_anchor,
+    persist_result: bool = True,
 ) -> dict[str, Any]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
@@ -38,11 +39,14 @@ def verify_on_chain_anchor(
             raise ValueError(f"No DB batch anchor found for day {day}{suffix}")
 
         result = _verify_anchor_row(anchor=anchor, chain_config=chain_config, reader=reader)
-        persist_verification_result(result, verification_type="on_chain_batch", db_session=session)
-        session.commit()
+        if persist_result:
+            persist_verification_result(result, verification_type="on_chain_batch", db_session=session)
+            if owns_session:
+                session.commit()
         return result
     except Exception:
-        session.rollback()
+        if owns_session:
+            session.rollback()
         raise
     finally:
         if owns_session:
@@ -55,6 +59,7 @@ def verify_on_chain_anchor_by_id(
     db_session: Session | None = None,
     config: BlockchainConfig | None = None,
     reader: AnchorReader = get_anchor,
+    persist_result: bool = True,
 ) -> dict[str, Any]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
@@ -66,11 +71,14 @@ def verify_on_chain_anchor_by_id(
             raise ValueError(f"No DB batch anchor found for id {anchor_id}")
 
         result = _verify_anchor_row(anchor=anchor, chain_config=chain_config, reader=reader)
-        persist_verification_result(result, verification_type="on_chain_batch", db_session=session)
-        session.commit()
+        if persist_result:
+            persist_verification_result(result, verification_type="on_chain_batch", db_session=session)
+            if owns_session:
+                session.commit()
         return result
     except Exception:
-        session.rollback()
+        if owns_session:
+            session.rollback()
         raise
     finally:
         if owns_session:

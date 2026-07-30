@@ -240,3 +240,67 @@ For a blockchain-backed result, include:
 
 For a tamper-evidence result, include `tamper_summary.md` and the key before
 and after fields from `tamper_summary.json`.
+# Controlled database tamper matrix
+
+The Reviewer 4 tamper experiment is a Postgres-backed, rollback-isolated matrix of
+seven deterministic mutations. It uses the existing receipt hashing, receipt
+rebuild, Merkle, batch membership, audit, and blockchain verifier code. The
+normalized meter layer independently reads `meter_values`; it does not reconstruct
+samples from `sessions.session_json` or `receipts.receipt_json`.
+
+## Requirements and baseline
+
+Configure `DATABASE_URL` for a migrated Postgres database (`python -m src.db init`).
+A controlled three-session baseline can be generated and tested with:
+
+```bash
+.venv/bin/python scripts/run_tamper_matrix.py \
+  --run-id reviewer4_tamper_matrix \
+  --day 2026-07-30 \
+  --generate-baseline \
+  --output-dir results/reviewer4_tamper_matrix/tamper_matrix
+```
+
+The prefix defaults to the run ID and the first generated session is selected. To
+use an existing baseline, provide `--prefix`, `--session-id`, and optionally
+`--anchor-id`. The selected anchor must contain the receipt, its membership count
+and root must be consistent, and the session must contain at least three normalized
+meter samples.
+
+Run one mutation with `--scenario T2`. Repeating `--scenario` selects multiple
+scenarios. Every scenario starts with all five layers passing, runs inside a
+database savepoint, rolls back, and requires the complete baseline to pass again.
+Verification persistence is disabled inside scenario transactions so verifier
+commits cannot invalidate the savepoint.
+
+## Verification layers
+
+- **Receipt hash** hashes the canonical stored receipt JSON and compares it with
+  `receipts.receipt_hash`.
+- **Normalized meter stream** orders persisted `meter_values`, uses the receipt
+  builder's canonical meter-leaf encoding and Merkle implementation, checks sample
+  count/gaps and duplicates, reconstructs directional energy, and compares it with
+  receipt JSON and normalized receipt columns.
+- **Database audit** rebuilds from the stored session, compares normalized receipt
+  columns, and separately embeds the independent normalized-meter result.
+- **Batch verification** recomputes the historical membership root and checks both
+  membership count and root.
+- **On-chain comparison** compares the database anchor root/count with an injected
+  deterministic reader in automated tests. This differs from real-chain execution:
+  it exercises the same verifier and dependency boundary but is not evidence of an
+  Anvil transaction.
+
+For a real local chain, start Anvil, deploy the contract as documented in
+`docs/architecture/blockchain_anchoring.md`, configure `WEB3_RPC_URL`,
+`ANCHOR_CONTRACT_ADDRESS`, and `ANCHOR_PRIVATE_KEY`, then add `--publish-chain`.
+`--require-chain` never silently substitutes a reader and requires
+`--publish-chain`.
+
+Artifacts are written under `results/<run_id>/tamper_matrix/`: JSON, CSV,
+Markdown, summary JSON, and a manifest. The Markdown table is intended as input to
+the manuscript update, but this command does not edit the manuscript.
+
+These controlled scenarios are not a general attack-detection probability. They
+do not establish source-meter authenticity or prove complete session capture.
+Historical batch or chain commitments are expected to remain unchanged for local
+off-chain mutations that do not alter their stored receipt-hash snapshot.
