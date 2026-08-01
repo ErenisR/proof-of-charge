@@ -242,6 +242,11 @@ For a tamper-evidence result, include `tamper_summary.md` and the key before
 and after fields from `tamper_summary.json`.
 # Controlled database tamper matrix
 
+Newly constructed receipts use the explicit `poc-c14n-v1` serialization profile.
+Its frozen fields, decimal scales, UTC timestamp form, Unicode rules,
+cross-language vectors, and legacy verification behavior are specified in
+`docs/reports/canonical_receipt_serialization.md`.
+
 The Reviewer 4 tamper experiment is a Postgres-backed, rollback-isolated matrix of
 seven deterministic mutations. It uses the existing receipt hashing, receipt
 rebuild, Merkle, batch membership, audit, and blockchain verifier code. The

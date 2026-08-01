@@ -1,0 +1,47 @@
+{
+  "profile": "poc-c14n-v1",
+  "vectors": [
+    {
+      "name": "offset-unicode-rounding-array-order",
+      "receipt": {
+        "version": "1.0",
+        "schema_version": "v2g-v1",
+        "canonicalization_profile": "poc-c14n-v1",
+        "hash_algorithm": "sha-256",
+        "session_type": "bidirectional",
+        "session_id": "café-session",
+        "user_id": "User-A",
+        "evse_id": "EVSE-01",
+        "ocpp_tx_id": "Tx-01",
+        "start_ts": "2026-07-15T10:00:00+02:00",
+        "end_ts": "2026-07-15T09:15:30.12Z",
+        "energy_kwh": "1.2345",
+        "energy_summary": {
+          "import_kwh": "2.0004",
+          "export_kwh": "0.7655",
+          "net_kwh": "1.2345"
+        },
+        "pricing": {
+          "currency": "EUR",
+          "model": "TOU",
+          "components": [],
+          "import_components": [
+            {"from": "2026-07-15T10:00:00+02:00", "to": "2026-07-15T08:30:00Z", "price_per_kwh": "0.1255"},
+            {"from": "2026-07-15T08:30:00Z", "to": "2026-07-15T09:15:30.120000Z", "price_per_kwh": "0.2"}
+          ],
+          "export_components": []
+        },
+        "settlement": {
+          "gross_import_cost": "0.251",
+          "gross_export_credit": "-0.0",
+          "net_amount": "0.2510",
+          "currency": "EUR"
+        },
+        "merkle_root": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "stream_hash_alg": "sha256"
+      },
+      "canonical_text": "{\"canonicalization_profile\":\"poc-c14n-v1\",\"end_ts\":\"2026-07-15T09:15:30.120000Z\",\"energy_kwh\":\"1.235\",\"energy_summary\":{\"export_kwh\":\"0.766\",\"import_kwh\":\"2.000\",\"net_kwh\":\"1.235\"},\"evse_id\":\"EVSE-01\",\"hash_algorithm\":\"sha-256\",\"merkle_root\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"ocpp_tx_id\":\"Tx-01\",\"pricing\":{\"components\":[],\"currency\":\"EUR\",\"export_components\":[],\"import_components\":[{\"from\":\"2026-07-15T08:00:00.000000Z\",\"price_per_kwh\":\"0.126\",\"to\":\"2026-07-15T08:30:00.000000Z\"},{\"from\":\"2026-07-15T08:30:00.000000Z\",\"price_per_kwh\":\"0.200\",\"to\":\"2026-07-15T09:15:30.120000Z\"}],\"model\":\"TOU\"},\"schema_version\":\"v2g-v1\",\"session_id\":\"café-session\",\"session_type\":\"bidirectional\",\"settlement\":{\"currency\":\"EUR\",\"gross_export_credit\":\"0.000\",\"gross_import_cost\":\"0.251\",\"net_amount\":\"0.251\"},\"start_ts\":\"2026-07-15T08:00:00.000000Z\",\"stream_hash_alg\":\"sha256\",\"user_id\":\"User-A\",\"version\":\"1.0\"}",
+      "sha256": "0x091ee8ca80f9beb9f99b86f43abb33b5c97dc919f313b93d40f935169f2500eb"
+    }
+  ]
+}

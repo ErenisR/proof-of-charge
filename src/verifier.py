@@ -1,6 +1,5 @@
 # src/verifier.py
 import json
-import hashlib
 from pathlib import Path
 from typing import Dict, Any
 
@@ -14,9 +13,7 @@ from .storage import load_index
 
 
 def compute_hash(payload: Dict[str, Any]) -> str:
-    data = json.dumps(payload["receipt"], sort_keys=True).encode("utf-8")
-    h = hashlib.sha256(data).hexdigest()
-    return "0x" + h
+    return hash_receipt(payload["receipt"])
 
 
 def verify_session_details(session_id: str) -> Dict[str, Any]:
@@ -42,7 +39,12 @@ def verify_session_from_files(session_id: str) -> Dict[str, Any]:
         raise FileNotFoundError(f"Receipt file {path} not found")
 
     stored = json.loads(path.read_text())
-    actual_hash = compute_hash(stored)
+    canonicalization_error = None
+    try:
+        actual_hash = compute_hash(stored)
+    except ValueError as exc:
+        actual_hash = None
+        canonicalization_error = str(exc)
 
     return {
         "source": "files",
@@ -52,6 +54,7 @@ def verify_session_from_files(session_id: str) -> Dict[str, Any]:
         "match": actual_hash == expected_hash,
         "path": str(path),
         "day": entry.get("batch_day"),
+        "canonicalization_error": canonicalization_error,
     }
 
 
@@ -69,7 +72,12 @@ def verify_session_from_db(
             raise ValueError(f"Session {session_id} not found in receipts table")
 
         receipt_json = receipt.receipt_json or {}
-        computed_hash = hash_receipt(receipt_json)
+        canonicalization_error = None
+        try:
+            computed_hash = hash_receipt(receipt_json)
+        except ValueError as exc:
+            computed_hash = None
+            canonicalization_error = str(exc)
         result = {
             "source": "db",
             "session_id": session_id,
@@ -79,6 +87,7 @@ def verify_session_from_db(
             "computed_root": receipt_json.get("merkle_root"),
             "match": computed_hash == receipt.receipt_hash,
             "day": _receipt_day(receipt_json),
+            "canonicalization_error": canonicalization_error,
         }
         if persist_result:
             persist_receipt_verification(result, db_session=session)

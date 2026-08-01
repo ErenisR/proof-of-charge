@@ -23,6 +23,7 @@ from .blockchain.publisher import publish_batch_anchor_by_id
 from .blockchain.verifier import verify_on_chain_anchor_by_id
 from .receipt_builder import build_receipt, hash_receipt
 from .receipt_schema import DEFAULT_SCHEMA_VERSION, DEFAULT_SESSION_TYPE
+from .receipt_canonicalization import HASH_ALGORITHM
 from .repository import persist_finalized_session
 from .storage import save_receipt, write_local_receipts_enabled
 
@@ -44,7 +45,10 @@ def finalize_session(session: FinalizeSessionRequest) -> FinalizeSessionResponse
         session_dict: Dict[str, Any] = session.model_dump(by_alias=True)
         session_dict["schema_version"] = session_dict.get("schema_version") or DEFAULT_SCHEMA_VERSION
         session_dict["session_type"] = session_dict.get("session_type") or DEFAULT_SESSION_TYPE
-        receipt = build_receipt(session_dict)
+        receipt = build_receipt(
+            session_dict,
+            canonicalization_profile=session.canonicalization_profile,
+        )
         receipt_hash = hash_receipt(receipt)
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -61,7 +65,12 @@ def finalize_session(session: FinalizeSessionRequest) -> FinalizeSessionResponse
         raise HTTPException(status_code=503, detail="Database operation failed") from exc
 
     # Later: send to IPFS and anchor on-chain.
-    return FinalizeSessionResponse(receipt=receipt, hash=receipt_hash)
+    return FinalizeSessionResponse(
+        receipt=receipt,
+        hash=receipt_hash,
+        canonicalization_profile=receipt["canonicalization_profile"],
+        hash_algorithm=HASH_ALGORITHM,
+    )
 
 
 @app.get("/health/db", response_model=DbHealthResponse)

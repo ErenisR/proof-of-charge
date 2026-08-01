@@ -42,7 +42,8 @@ def tamper_receipt_from_files(session_id: str, delta_kwh: float = 0.123) -> Dict
     if "energy_kwh" not in receipt:
         raise ValueError("Receipt has no energy_kwh field to tamper")
 
-    receipt["energy_kwh"] = round(float(receipt["energy_kwh"]) + float(delta_kwh), 3)
+    changed = round(float(receipt["energy_kwh"]) + float(delta_kwh), 3)
+    receipt["energy_kwh"] = f"{changed:.3f}" if isinstance(receipt["energy_kwh"], str) else changed
     payload["receipt"] = receipt
     _save_payload(path, payload)
 
@@ -76,7 +77,8 @@ def tamper_receipt_from_db(
         if "energy_kwh" not in receipt:
             raise ValueError("Receipt has no energy_kwh field to tamper")
 
-        receipt["energy_kwh"] = round(float(receipt["energy_kwh"]) + float(delta_kwh), 3)
+        changed = round(float(receipt["energy_kwh"]) + float(delta_kwh), 3)
+        receipt["energy_kwh"] = f"{changed:.3f}" if isinstance(receipt["energy_kwh"], str) else changed
         stored.receipt_json = receipt
         session.flush()
 

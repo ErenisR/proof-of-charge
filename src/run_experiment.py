@@ -27,6 +27,7 @@ from .export import export_all
 from .models import BatchAnchor, BatchAnchorReceipt, ChargingSession, MeterValue, Receipt
 from .repository import persist_finalized_session
 from .receipt_builder import build_receipt, hash_receipt
+from .receipt_canonicalization import CANONICALIZATION_PROFILE_V1, HASH_ALGORITHM
 from .receipt_schema import SESSION_TYPE_ORDER
 from .session_validation import summarize_session_metrics, summarize_validation, validate_session_receipt
 from .storage import BASE_DIR, load_index, save_receipt, write_local_receipts_enabled
@@ -320,6 +321,8 @@ def _build_run_exports_from_files(
                 "user_id": receipt.get("user_id"),
                 "receipt_hash": expected_hash,
                 "merkle_root": receipt.get("merkle_root"),
+                "canonicalization_profile": receipt.get("canonicalization_profile"),
+                "hash_algorithm": receipt.get("hash_algorithm"),
                 "energy_kwh": receipt.get("energy_kwh"),
                 "import_kwh": (receipt.get("energy_summary") or {}).get("import_kwh"),
                 "export_kwh": (receipt.get("energy_summary") or {}).get("export_kwh"),
@@ -379,6 +382,8 @@ def _build_run_exports_from_files(
             "batch_day",
             "receipt_hash",
             "merkle_root",
+            "canonicalization_profile",
+            "hash_algorithm",
             "batch_root",
         ],
     )
@@ -504,6 +509,8 @@ def _build_run_exports_from_db(
                 "batch_day": anchor.get("batch_day"),
                 "receipt_hash": expected_hash,
                 "merkle_root": receipt_row.merkle_root,
+                "canonicalization_profile": receipt.get("canonicalization_profile"),
+                "hash_algorithm": receipt.get("hash_algorithm"),
                 "batch_root": anchor.get("batch_root"),
                 "anchored_membership": session_id in anchor_lookup,
                 "batch_verified": session_id in anchor_lookup,
@@ -585,6 +592,8 @@ def _write_run_dataset_csvs(
             "batch_day",
             "receipt_hash",
             "merkle_root",
+            "canonicalization_profile",
+            "hash_algorithm",
             "batch_root",
             "anchored_membership",
             "batch_verified",
@@ -763,6 +772,8 @@ def run_experiment(
         "day": day,
         "seed": seed,
         "session_type_mode": session_type,
+        "canonicalization_profile": CANONICALIZATION_PROFILE_V1,
+        "hash_algorithm": HASH_ALGORITHM,
         "num_sessions_requested": num_sessions,
         **synth["session_metrics"],
         "num_sessions_anchored": anchored_count,
@@ -816,6 +827,8 @@ def run_experiment(
                 "publish_chain": publish_chain,
                 "batch_timezone": "UTC",
                 "batch_eligibility_policy": ELIGIBILITY_POLICY,
+                "canonicalization_profile": CANONICALIZATION_PROFILE_V1,
+                "receipt_hash_algorithm": HASH_ALGORITHM,
             },
             "metrics": metrics,
             "session_ids": synth["session_ids"],

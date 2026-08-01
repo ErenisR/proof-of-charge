@@ -58,15 +58,15 @@ def test_build_receipt_uses_canonical_schema_and_energy_math():
     assert receipt["schema_version"] == DEFAULT_SCHEMA_VERSION
     assert receipt["session_type"] == "bidirectional"
     assert receipt["energy_summary"] == {
-        "import_kwh": 3.0,
-        "export_kwh": 0.75,
-        "net_kwh": 2.25,
+        "import_kwh": "3.000",
+        "export_kwh": "0.750",
+        "net_kwh": "2.250",
     }
-    assert receipt["energy_kwh"] == 2.25
+    assert receipt["energy_kwh"] == "2.250"
     assert receipt["settlement"] == {
-        "gross_import_cost": 0.9,
-        "gross_export_credit": 0.075,
-        "net_amount": 0.825,
+        "gross_import_cost": "0.900",
+        "gross_export_credit": "0.075",
+        "net_amount": "0.825",
         "currency": "EUR",
     }
     assert receipt["merkle_root"].startswith("0x")

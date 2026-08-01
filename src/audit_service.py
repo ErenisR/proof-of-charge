@@ -28,7 +28,11 @@ def audit_session(
         if not receipt_row:
             raise ValueError(f"Receipt {session_id} not found in receipts table")
 
-        rebuilt_receipt = build_receipt(charging_session.session_json)
+        stored_profile = (receipt_row.receipt_json or {}).get("canonicalization_profile")
+        rebuilt_receipt = build_receipt(
+            charging_session.session_json,
+            canonicalization_profile=stored_profile,
+        )
         rebuilt_hash = hash_receipt(rebuilt_receipt)
         stored_receipt_hash = hash_receipt(receipt_row.receipt_json or {})
         normalized_mismatches = _normalized_mismatches(receipt_row)

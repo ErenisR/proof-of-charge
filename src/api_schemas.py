@@ -3,6 +3,7 @@ from typing import Any, Generic, TypeVar
 from pydantic import BaseModel, Field
 
 from .models import BatchAnchor, ChargingSession, Receipt, Verification
+from .receipt_canonicalization import CANONICALIZATION_PROFILE_V1
 
 
 T = TypeVar("T")
@@ -45,6 +46,7 @@ class FinalizeSessionRequest(BaseModel):
     start_ts: str
     end_ts: str
     schema_version: str | None = None
+    canonicalization_profile: str = CANONICALIZATION_PROFILE_V1
     session_type: str | None = None
     energy_summary: dict[str, Any] | None = None
     settlement: dict[str, Any] | None = None
@@ -55,6 +57,8 @@ class FinalizeSessionRequest(BaseModel):
 class FinalizeSessionResponse(BaseModel):
     receipt: dict[str, Any]
     hash: str
+    canonicalization_profile: str
+    hash_algorithm: str
 
 
 class DbHealthResponse(BaseModel):
@@ -149,6 +153,8 @@ class ReceiptResponse(BaseModel):
     receipt_hash: str
     merkle_root: str
     schema_version: str
+    canonicalization_profile: str | None
+    hash_algorithm: str | None
     session_type: str
     energy_kwh: float
     import_kwh: float
@@ -169,6 +175,8 @@ class ReceiptResponse(BaseModel):
             receipt_hash=row.receipt_hash,
             merkle_root=row.merkle_root,
             schema_version=row.schema_version,
+            canonicalization_profile=(row.receipt_json or {}).get("canonicalization_profile"),
+            hash_algorithm=(row.receipt_json or {}).get("hash_algorithm"),
             session_type=row.session_type,
             energy_kwh=row.energy_kwh,
             import_kwh=row.import_kwh,

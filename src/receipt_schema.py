@@ -25,6 +25,8 @@ REQUIRED_RECEIPT_FIELDS = {
     "stream_hash_alg",
 }
 
+PROFILED_RECEIPT_FIELDS = {"canonicalization_profile", "hash_algorithm"}
+
 REQUIRED_ENERGY_SUMMARY_FIELDS = {"import_kwh", "export_kwh", "net_kwh"}
 REQUIRED_PRICING_FIELDS = {"currency", "model", "components", "import_components", "export_components"}
 REQUIRED_SETTLEMENT_FIELDS = {
@@ -36,7 +38,8 @@ REQUIRED_SETTLEMENT_FIELDS = {
 
 
 def validate_receipt_model(receipt: Dict[str, Any]) -> None:
-    missing = sorted(REQUIRED_RECEIPT_FIELDS - set(receipt))
+    required = REQUIRED_RECEIPT_FIELDS | (PROFILED_RECEIPT_FIELDS if "canonicalization_profile" in receipt else set())
+    missing = sorted(required - set(receipt))
     if missing:
         raise ValueError(f"Receipt missing required fields: {', '.join(missing)}")
 
@@ -75,6 +78,12 @@ def validate_receipt_model(receipt: Dict[str, Any]) -> None:
         raise ValueError("merkle_root must be a 0x-prefixed hex string")
     if receipt["stream_hash_alg"] != "sha256":
         raise ValueError("stream_hash_alg must be sha256")
+    if "canonicalization_profile" in receipt:
+        from .receipt_canonicalization import CANONICALIZATION_PROFILE_V1, HASH_ALGORITHM
+        if receipt["canonicalization_profile"] != CANONICALIZATION_PROFILE_V1:
+            raise ValueError(f"Unsupported canonicalization_profile: {receipt['canonicalization_profile']}")
+        if receipt.get("hash_algorithm") != HASH_ALGORITHM:
+            raise ValueError(f"hash_algorithm must be {HASH_ALGORITHM}")
 
 
 def _require_nested_fields(receipt: Dict[str, Any], key: str, required: set[str]) -> None:

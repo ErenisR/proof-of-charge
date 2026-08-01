@@ -156,7 +156,8 @@ def _mutate(session: Session, ctx: MatrixContext, scenario_id: str) -> dict[str,
     if scenario_id == "T1":
         payload = deepcopy(receipt.receipt_json)
         original = float(payload["energy_kwh"])
-        payload["energy_kwh"] = round(original + 0.123, 3)
+        changed = round(original + 0.123, 3)
+        payload["energy_kwh"] = f"{changed:.3f}" if isinstance(receipt.receipt_json["energy_kwh"], str) else changed
         receipt.receipt_json = payload
         session.flush()
         return {"field": "receipt_json.energy_kwh", "before": original, "after": payload["energy_kwh"]}
