@@ -5,6 +5,7 @@ import sys
 from datetime import timezone
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
+from contextlib import nullcontext
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from .batch_merkle import LEGACY_PROFILE, PROFILE_V1, BatchContext, BatchLeafRec
 from .batch_service import audit_batch_membership
 from .repository import persist_batch_verification
 from .storage import load_index
+from .performance_timing import TimingRecorder
 
 
 def _load_receipt_payload(path: Path) -> Dict[str, Any]:
@@ -68,11 +70,13 @@ def _collect_hashes_for_day(
     return receipt_hashes, session_ids
 
 
-def verify_day(day: str, session_prefix: str | None = None) -> Dict[str, Any]:
+def verify_day(day: str, session_prefix: str | None = None,
+               timing_recorder: TimingRecorder | None = None) -> Dict[str, Any]:
     if db.database_enabled():
         session = db.session_scope()
         try:
-            return verify_day_from_db(day, session_prefix=session_prefix, db_session=session)
+            return verify_day_from_db(day, session_prefix=session_prefix, db_session=session,
+                                      timing_recorder=timing_recorder)
         finally:
             session.close()
     return verify_day_from_files(day, session_prefix=session_prefix)
@@ -103,26 +107,28 @@ def verify_day_from_db(
     session_prefix: str | None = None,
     db_session: Session | None = None,
     persist_result: bool = True,
+    timing_recorder: TimingRecorder | None = None,
 ) -> Dict[str, Any]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
 
+    measure = lambda stage, **kwargs: timing_recorder.measure(stage, **kwargs) if timing_recorder else nullcontext()
     try:
+      with measure("batch_verification_total"):
         anchor = _find_anchor_from_db(session, day=day, session_prefix=session_prefix)
         if not anchor:
             suffix = f" with prefix {session_prefix}" if session_prefix else ""
             raise ValueError(f"No anchor found for day {day}{suffix}")
 
-        receipt_hashes, session_ids = _collect_anchor_memberships_from_db(
-            session,
-            anchor_id=anchor.id,
-        )
+        with measure("batch_membership_load", anchor_id=anchor.id):
+            receipt_hashes, session_ids = _collect_anchor_memberships_from_db(session, anchor_id=anchor.id)
         if not receipt_hashes:
             raise ValueError(f"No receipt memberships found for anchor {anchor.id}")
         if anchor.commitment_profile == PROFILE_V1:
-            result = _verify_profiled_anchor(session, anchor)
+            result = _verify_profiled_anchor(session, anchor, timing_recorder=timing_recorder)
         else:
-            computed_root = build_batch_root(receipt_hashes)
+            with measure("batch_merkle_recomputation", anchor_id=anchor.id):
+                computed_root = build_batch_root(receipt_hashes)
             expected_root = anchor.batch_root
             root_match = computed_root == expected_root
             count_match = len(receipt_hashes) == anchor.receipt_count
@@ -147,9 +153,10 @@ def verify_day_from_db(
             "proofs_validated": 0,
             }
         if persist_result:
-            persist_batch_verification(result, db_session=session)
-            if owns_session:
-                session.commit()
+            with measure("batch_verification_persistence", anchor_id=anchor.id):
+                persist_batch_verification(result, db_session=session)
+                if owns_session:
+                    session.commit()
         return result
     except Exception:
         if owns_session:
@@ -195,12 +202,15 @@ def verify_anchor_from_db(anchor_id: int, db_session: Session | None = None, per
         if owns: session.close()
 
 
-def _verify_profiled_anchor(session: Session, anchor: BatchAnchor) -> Dict[str, Any]:
+def _verify_profiled_anchor(session: Session, anchor: BatchAnchor,
+                            timing_recorder: TimingRecorder | None = None) -> Dict[str, Any]:
     rows = list(session.scalars(select(BatchAnchorReceipt).where(BatchAnchorReceipt.anchor_id == anchor.id).order_by(BatchAnchorReceipt.leaf_index)))
     profile_match = anchor.commitment_profile == PROFILE_V1
+    measure = lambda stage: timing_recorder.measure(stage, anchor_id=anchor.id) if timing_recorder else nullcontext()
     try:
         context = BatchContext.from_dict(anchor.context_json or {})
-        commitment = build_batch_commitment([BatchLeafRecord(row.session_id, row.normalized_start_ts.replace(tzinfo=timezone.utc) if row.normalized_start_ts.tzinfo is None else row.normalized_start_ts, row.receipt_hash) for row in rows], context)
+        with measure("batch_merkle_recomputation"):
+            commitment = build_batch_commitment([BatchLeafRecord(row.session_id, row.normalized_start_ts.replace(tzinfo=timezone.utc) if row.normalized_start_ts.tzinfo is None else row.normalized_start_ts, row.receipt_hash) for row in rows], context)
         context_match = hex32(commitment.context_hash) == anchor.context_hash
         ordering_match = [row.leaf_index for row in rows] == list(range(len(rows))) and [row.session_id for row in rows] == [record.session_id for record in commitment.records]
         leaf_hashes_match = all(row.leaf_hash == hex32(commitment.leaf_hashes[index]) for index, row in enumerate(rows))
@@ -212,7 +222,8 @@ def _verify_profiled_anchor(session: Session, anchor: BatchAnchor) -> Dict[str, 
         commitment = None; error = f"{type(exc).__name__}: {exc}"
     count_match = len(rows) == anchor.receipt_count
     immutable_match = all((profile_match, context_match, count_match, ordering_match, leaf_hashes_match, tree_root_match, batch_root_match))
-    audit = audit_batch_membership(anchor.id, session)
+    with measure("batch_snapshot_audit"):
+        audit = audit_batch_membership(anchor.id, session)
     return {
         "anchor_id": anchor.id, "day": anchor.day, "session_prefix": anchor.session_prefix,
         "commitment_profile": anchor.commitment_profile, "expected_root": anchor.batch_root,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from typing import Any, Callable
+from contextlib import nullcontext
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from src.repository import persist_verification_result
 
 from .cast_client import OnChainAnchor, get_anchor
 from .config import BlockchainConfig, load_blockchain_config
+from src.performance_timing import TimingRecorder
 
 
 AnchorReader = Callable[[BlockchainConfig, str, str | None], OnChainAnchor]
@@ -27,6 +29,7 @@ def verify_on_chain_anchor(
     config: BlockchainConfig | None = None,
     reader: AnchorReader = get_anchor,
     persist_result: bool = True,
+    timing_recorder: TimingRecorder | None = None,
 ) -> dict[str, Any]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
@@ -38,7 +41,9 @@ def verify_on_chain_anchor(
             suffix = f" with prefix {session_prefix}" if session_prefix else ""
             raise ValueError(f"No DB batch anchor found for day {day}{suffix}")
 
-        result = _verify_anchor_row(anchor=anchor, chain_config=chain_config, reader=reader)
+        measure = timing_recorder.measure("chain_read_verification", anchor_id=anchor.id) if timing_recorder else nullcontext()
+        with measure:
+            result = _verify_anchor_row(anchor=anchor, chain_config=chain_config, reader=reader)
         if persist_result:
             persist_verification_result(result, verification_type="on_chain_batch", db_session=session)
             if owns_session:

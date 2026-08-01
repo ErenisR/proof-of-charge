@@ -33,6 +33,8 @@ from .session_validation import summarize_session_metrics, summarize_validation,
 from .storage import BASE_DIR, load_index, save_receipt, write_local_receipts_enabled
 from .synthetic_sessions import _load_registry, generate_session
 from .verifier_batch import verify_day
+from .performance_timing import TimingRecorder
+from contextlib import nullcontext
 
 RESULTS_DIR = BASE_DIR / "results"
 EXPORTS_DIR = BASE_DIR / "exports"
@@ -212,6 +214,7 @@ def _finalize_synthetic_sessions(
     session_type: str = "auto",
     bidirectional_ratio: float = 0.30,
     discharge_ratio: float = 0.15,
+    timing_recorder: TimingRecorder | None = None,
 ) -> Dict[str, Any]:
     registry = _load_registry(registry_path) if registry_path else None
     rng = random.Random(seed)
@@ -220,30 +223,40 @@ def _finalize_synthetic_sessions(
     validation_failures: Dict[str, List[str]] = {}
 
     t0 = time.perf_counter()
-    for i in range(1, num_sessions + 1):
-        session = generate_session(
-            i,
-            registry=registry,
-            rng=rng,
-            target_day=day,
-            session_prefix=session_prefix,
-            deterministic_tx=True,
-            session_mode=session_type,
-            bidirectional_ratio=bidirectional_ratio,
-            discharge_ratio=discharge_ratio,
-        )
-        receipt = build_receipt(session)
-        receipt_hash = hash_receipt(receipt)
+    # Benchmark mode deliberately separates deterministic generation from the
+    # primary receipt pipeline. Normal mode retains the historical loop behavior.
+    generated: list[Dict[str, Any]] = []
+    generation_measure = timing_recorder.measure("synthetic_session_generation") if timing_recorder else nullcontext()
+    with generation_measure:
+      for i in range(1, num_sessions + 1):
+        generated.append(generate_session(
+            i, registry=registry, rng=rng, target_day=day, session_prefix=session_prefix,
+            deterministic_tx=True, session_mode=session_type,
+            bidirectional_ratio=bidirectional_ratio, discharge_ratio=discharge_ratio,
+        ))
+    for session in generated:
+      pipeline_measure = timing_recorder.measure("receipt_pipeline_total", session_id=session["session_id"]) if timing_recorder else nullcontext()
+      with pipeline_measure:
+        receipt = build_receipt(session, timing_recorder=timing_recorder)
+        hash_measure = timing_recorder.measure("receipt_canonical_hashing", session_id=session["session_id"]) if timing_recorder else nullcontext()
+        with hash_measure:
+            receipt_hash = hash_receipt(receipt)
         records.append({"session": session, "receipt": receipt, "receipt_hash": receipt_hash})
-        failures = validate_session_receipt(session, receipt, receipt_hash)
+        validation_measure = timing_recorder.measure("receipt_validation", session_id=session["session_id"]) if timing_recorder else nullcontext()
+        with validation_measure:
+            failures = validate_session_receipt(session, receipt, receipt_hash)
         if session["session_id"] in validation_failures:
             failures.append("duplicate_session_id")
         validation_failures[session["session_id"]] = failures
         db_enabled = db.database_enabled()
         if db_enabled:
-            persist_finalized_session(session, receipt, receipt_hash)
+            persistence_measure = timing_recorder.measure("database_persistence", session_id=session["session_id"], metadata={"includes": "session,meter_values,receipt,commit,session_open_close"}) if timing_recorder else nullcontext()
+            with persistence_measure:
+                persist_finalized_session(session, receipt, receipt_hash)
         if not db_enabled or write_local_receipts_enabled():
-            save_receipt(session["session_id"], receipt, receipt_hash, session)
+            file_measure = timing_recorder.measure("local_file_persistence", session_id=session["session_id"]) if timing_recorder else nullcontext()
+            with file_measure:
+                save_receipt(session["session_id"], receipt, receipt_hash, session)
         session_ids.append(session["session_id"])
     t1 = time.perf_counter()
 
@@ -711,6 +724,7 @@ def run_experiment(
     discharge_ratio: float = 0.15,
     skip_figures: bool = False,
     publish_chain: bool = False,
+    timing_recorder: TimingRecorder | None = None,
 ) -> Dict[str, Any]:
     run_id = run_id or _default_run_id()
     run_dir = RESULTS_DIR / run_id
@@ -725,44 +739,41 @@ def run_experiment(
         session_type=session_type,
         bidirectional_ratio=bidirectional_ratio,
         discharge_ratio=discharge_ratio,
+        timing_recorder=timing_recorder,
     )
 
-    batch_root, anchored_count = anchor_day(day, session_prefix=run_id)
-    verify = verify_day(day, session_prefix=run_id)
+    batch_root, anchored_count = anchor_day(day, session_prefix=run_id, timing_recorder=timing_recorder)
+    verify = verify_day(day, session_prefix=run_id, timing_recorder=timing_recorder)
     chain_publish = None
     chain_verify = None
     if publish_chain:
-        chain_publish = publish_batch_anchor(day, session_prefix=run_id)
-        chain_verify = verify_on_chain_anchor(day, session_prefix=run_id)
+        chain_publish = publish_batch_anchor(day, session_prefix=run_id, timing_recorder=timing_recorder)
+        chain_verify = verify_on_chain_anchor(day, session_prefix=run_id, timing_recorder=timing_recorder)
 
     # Keep global exports up to date, then optionally render run-scoped charts.
-    export_all()
+    export_measure = timing_recorder.measure("dataset_export") if timing_recorder else nullcontext()
+    with export_measure:
+        export_all()
     if not skip_figures:
         generate_charts(session_prefix=run_id)
         _copy_figures(run_dir)
 
-    dataset_counts = _build_run_exports(
-        run_dir=run_dir,
-        session_prefix=run_id,
-        day=day,
-        batch_root=batch_root,
-    )
+    with (timing_recorder.measure("dataset_export") if timing_recorder else nullcontext()):
+        dataset_counts = _build_run_exports(run_dir=run_dir, session_prefix=run_id, day=day, batch_root=batch_root)
 
     reconciliation = None
     if db.database_enabled():
         reconciliation_session = db.session_scope()
         try:
             requested_ids = [f"{run_id}-{i:04d}" for i in range(1, num_sessions + 1)]
-            reconciliation = reconcile_experiment_counts(
-                run_id=run_id,
-                day=day,
-                requested_session_ids=requested_ids,
-                generated_session_ids=synth["session_ids"],
-                verified_session_ids=verify["session_ids"],
-                db_session=reconciliation_session,
-                anchor_id=verify.get("anchor_id"),
-                exported_dataset_dir=run_dir / "datasets",
-            )
+            with (timing_recorder.measure("count_reconciliation") if timing_recorder else nullcontext()):
+                reconciliation = reconcile_experiment_counts(
+                    run_id=run_id, day=day, requested_session_ids=requested_ids,
+                    generated_session_ids=synth["session_ids"],
+                    verified_session_ids=verify["session_ids"],
+                    db_session=reconciliation_session, anchor_id=verify.get("anchor_id"),
+                    exported_dataset_dir=run_dir / "datasets",
+                )
             write_count_reconciliation_artifacts(reconciliation, run_dir)
         finally:
             reconciliation_session.close()
@@ -782,6 +793,11 @@ def run_experiment(
         "batch_root": batch_root,
         "batch_commitment_profile": verify.get("commitment_profile"),
         "batch_root_match": verify["match"],
+        "batch_context_match": verify.get("context_match"),
+        "batch_count_match": verify.get("count_match", verify.get("receipt_count_match")),
+        "batch_ordering_match": verify.get("ordering_match"),
+        "batch_leaf_hashes_match": verify.get("leaf_hashes_match"),
+        "batch_tree_root_match": verify.get("tree_root_match"),
         "receipt_count_verified": verify["receipt_count"],
         **synth["validation"],
         "datasets": dataset_counts,
@@ -810,6 +826,7 @@ def run_experiment(
                 "chain_status": chain_publish["chain_status"],
                 "chain_root_match": chain_verify["match"],
                 "chain_on_chain_receipt_count": chain_verify["on_chain_receipt_count"],
+                "chain_receipt_count_match": chain_verify["on_chain_receipt_count"] == chain_verify["expected_receipt_count"],
             }
         )
     _to_json(

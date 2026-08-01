@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from typing import Any, Callable
+from contextlib import nullcontext
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from src.models import BatchAnchor
 
 from .cast_client import TransactionReceipt, anchor_batch, get_transaction_receipt
 from .config import BlockchainConfig, load_blockchain_config
+from src.performance_timing import TimingRecorder
 
 
 AnchorSender = Callable[[BlockchainConfig, str, str | None, str, int], str]
@@ -28,6 +30,7 @@ def publish_batch_anchor(
     config: BlockchainConfig | None = None,
     sender: AnchorSender = anchor_batch,
     receipt_reader: ReceiptReader = get_transaction_receipt,
+    timing_recorder: TimingRecorder | None = None,
 ) -> dict[str, Any]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
@@ -50,8 +53,11 @@ def publish_batch_anchor(
             chain_config=chain_config,
             sender=sender,
             receipt_reader=receipt_reader,
+            timing_recorder=timing_recorder,
         )
-        session.commit()
+        measure = timing_recorder.measure("chain_anchor_database_update", anchor_id=result["anchor_id"]) if timing_recorder else nullcontext()
+        with measure:
+            session.commit()
         return result
     except Exception:
         session.rollback()
@@ -122,17 +128,16 @@ def _publish_anchor_row(
     chain_config: BlockchainConfig,
     sender: AnchorSender,
     receipt_reader: ReceiptReader,
+    timing_recorder: TimingRecorder | None = None,
 ) -> dict[str, Any]:
-    tx_hash = sender(
-        chain_config,
-        anchor.day,
-        anchor.session_prefix,
-        anchor.batch_root,
-        anchor.receipt_count,
-    )
-    receipt = receipt_reader(chain_config, tx_hash)
-    anchor.chain_tx = tx_hash
-    session.flush()
+    measure = lambda stage: timing_recorder.measure(stage, anchor_id=anchor.id) if timing_recorder else nullcontext()
+    with measure("chain_publication_total"):
+        with measure("chain_send_command"):
+            tx_hash = sender(chain_config, anchor.day, anchor.session_prefix, anchor.batch_root, anchor.receipt_count)
+        with measure("chain_receipt_query"):
+            receipt = receipt_reader(chain_config, tx_hash)
+        anchor.chain_tx = tx_hash
+        session.flush()
     return {
         "anchor_id": anchor.id,
         "day": anchor.day,

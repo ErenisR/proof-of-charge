@@ -16,6 +16,8 @@ from .receipt_canonicalization import (
     HASH_ALGORITHM,
     hash_canonical_receipt,
 )
+from .performance_timing import TimingRecorder
+from contextlib import nullcontext
 
 
 def _to_float(value: Any, field_name: str) -> float:
@@ -179,86 +181,83 @@ def _profile_components(components: List[Dict[str, Any]]) -> List[Dict[str, Any]
 def build_receipt(
     session: Dict[str, Any],
     canonicalization_profile: str | None = CANONICALIZATION_PROFILE_V1,
+    timing_recorder: TimingRecorder | None = None,
+    timing_context: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Build a minimal receipt from session dict.
     """
-    mvs = _normalize_meter_values(session["meter_values"])
-    if len(mvs) < 2:
-        raise ValueError("Need at least 2 meter values")
+    timing_context = timing_context or {}
+    session_id = timing_context.get("session_id", session.get("session_id"))
+    measure = lambda stage: timing_recorder.measure(stage, session_id=session_id) if timing_recorder else nullcontext()
+    with measure("receipt_construction_total"):
+        return _build_receipt_impl(session, canonicalization_profile, timing_recorder, session_id)
+
+
+def _build_receipt_impl(session: Dict[str, Any], canonicalization_profile: str | None,
+                        timing_recorder: TimingRecorder | None, session_id: str | None) -> Dict[str, Any]:
+    measure = lambda stage: timing_recorder.measure(stage, session_id=session_id) if timing_recorder else nullcontext()
+    with measure("meter_normalization"):
+        mvs = _normalize_meter_values(session["meter_values"])
+        if len(mvs) < 2:
+            raise ValueError("Need at least 2 meter values")
 
     # Build Merkle tree leaves as H(ts|import_kwh|export_kwh)
-    leaves = [meter_leaf_bytes(mv) for mv in mvs]
-
-    root = merkle_root(leaves)
-    first = mvs[0]
-    last = mvs[-1]
-
-    import_kwh = round(last["import_kwh"] - first["import_kwh"], 3)
-    export_kwh = round(last["export_kwh"] - first["export_kwh"], 3)
-    net_kwh = round(import_kwh - export_kwh, 3)
-
-    pricing = session.get("pricing", {})
-    import_components = _pricing_components(pricing)
-    export_components = _export_components(pricing)
-    import_price = _sum_weighted_cost(
-        session["start_ts"],
-        session["end_ts"],
-        import_kwh,
-        import_components,
-        "pricing.import_components",
-    )
-    export_price = _sum_weighted_cost(
-        session["start_ts"],
-        session["end_ts"],
-        export_kwh,
-        export_components,
-        "pricing.export_components",
-    )
-
-    gross_import_cost = round(import_price, 3)
-    gross_export_credit = round(export_price, 3)
-    net_amount = round(gross_import_cost - gross_export_credit, 3)
-
-    profiled = canonicalization_profile is not None
-    receipt = {
-        "version": RECEIPT_FORMAT_VERSION,
-        "schema_version": session.get("schema_version", DEFAULT_SCHEMA_VERSION),
-        "session_type": _derive_session_type(session.get("session_type"), import_kwh, export_kwh),
-        "session_id": session["session_id"],
-        "user_id": session["user_id"],
-        "evse_id": session["evse_id"],
-        "ocpp_tx_id": session["ocpp_tx_id"],
-        "start_ts": session["start_ts"],
-        "end_ts": session["end_ts"],
-        "energy_kwh": _profile_decimal(net_kwh) if profiled else net_kwh,
-        "energy_summary": {
-            "import_kwh": _profile_decimal(import_kwh) if profiled else import_kwh,
-            "export_kwh": _profile_decimal(export_kwh) if profiled else export_kwh,
-            "net_kwh": _profile_decimal(net_kwh) if profiled else net_kwh,
-        },
-        "pricing": {
-            "currency": (pricing or {}).get("currency", "EUR"),
-            "model": (pricing or {}).get("model", "TOU"),
-            "components": _profile_components((pricing or {}).get("components", [])) if profiled else (pricing or {}).get("components", []),
-            "import_components": _profile_components(import_components) if profiled else import_components,
-            "export_components": _profile_components(export_components) if profiled else export_components,
-        },
-        "settlement": {
-            "gross_import_cost": _profile_decimal(gross_import_cost) if profiled else gross_import_cost,
-            "gross_export_credit": _profile_decimal(gross_export_credit) if profiled else gross_export_credit,
-            "net_amount": _profile_decimal(net_amount) if profiled else net_amount,
-            "currency": (pricing or {}).get("currency", "EUR"),
-        },
-        "merkle_root": "0x" + root.hex(),
-        "stream_hash_alg": "sha256",
-    }
-    if canonicalization_profile is not None:
-        if canonicalization_profile != CANONICALIZATION_PROFILE_V1:
-            raise ValueError(f"Unknown canonicalization profile: {canonicalization_profile}")
-        receipt["canonicalization_profile"] = canonicalization_profile
-        receipt["hash_algorithm"] = HASH_ALGORITHM
-    validate_receipt_model(receipt)
+    with measure("meter_leaf_encoding"):
+        leaves = [meter_leaf_bytes(mv) for mv in mvs]
+    with measure("meter_merkle_construction"):
+        root = merkle_root(leaves)
+    with measure("receipt_energy_pricing_assembly"):
+        first = mvs[0]
+        last = mvs[-1]
+        import_kwh = round(last["import_kwh"] - first["import_kwh"], 3)
+        export_kwh = round(last["export_kwh"] - first["export_kwh"], 3)
+        net_kwh = round(import_kwh - export_kwh, 3)
+        pricing = session.get("pricing", {})
+        import_components = _pricing_components(pricing)
+        export_components = _export_components(pricing)
+        import_price = _sum_weighted_cost(session["start_ts"], session["end_ts"], import_kwh,
+                                          import_components, "pricing.import_components")
+        export_price = _sum_weighted_cost(session["start_ts"], session["end_ts"], export_kwh,
+                                          export_components, "pricing.export_components")
+        gross_import_cost = round(import_price, 3)
+        gross_export_credit = round(export_price, 3)
+        net_amount = round(gross_import_cost - gross_export_credit, 3)
+        profiled = canonicalization_profile is not None
+        receipt = {
+            "version": RECEIPT_FORMAT_VERSION,
+            "schema_version": session.get("schema_version", DEFAULT_SCHEMA_VERSION),
+            "session_type": _derive_session_type(session.get("session_type"), import_kwh, export_kwh),
+            "session_id": session["session_id"], "user_id": session["user_id"],
+            "evse_id": session["evse_id"], "ocpp_tx_id": session["ocpp_tx_id"],
+            "start_ts": session["start_ts"], "end_ts": session["end_ts"],
+            "energy_kwh": _profile_decimal(net_kwh) if profiled else net_kwh,
+            "energy_summary": {
+                "import_kwh": _profile_decimal(import_kwh) if profiled else import_kwh,
+                "export_kwh": _profile_decimal(export_kwh) if profiled else export_kwh,
+                "net_kwh": _profile_decimal(net_kwh) if profiled else net_kwh,
+            },
+            "pricing": {
+                "currency": pricing.get("currency", "EUR"), "model": pricing.get("model", "TOU"),
+                "components": _profile_components(pricing.get("components", [])) if profiled else pricing.get("components", []),
+                "import_components": _profile_components(import_components) if profiled else import_components,
+                "export_components": _profile_components(export_components) if profiled else export_components,
+            },
+            "settlement": {
+                "gross_import_cost": _profile_decimal(gross_import_cost) if profiled else gross_import_cost,
+                "gross_export_credit": _profile_decimal(gross_export_credit) if profiled else gross_export_credit,
+                "net_amount": _profile_decimal(net_amount) if profiled else net_amount,
+                "currency": pricing.get("currency", "EUR"),
+            },
+            "merkle_root": "0x" + root.hex(), "stream_hash_alg": "sha256",
+        }
+        if canonicalization_profile is not None:
+            if canonicalization_profile != CANONICALIZATION_PROFILE_V1:
+                raise ValueError(f"Unknown canonicalization profile: {canonicalization_profile}")
+            receipt["canonicalization_profile"] = canonicalization_profile
+            receipt["hash_algorithm"] = HASH_ALGORITHM
+    with measure("receipt_schema_validation"):
+        validate_receipt_model(receipt)
     return receipt
 
 

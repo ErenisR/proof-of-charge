@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
+from contextlib import nullcontext
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -26,6 +27,7 @@ from .batch_merkle import (
     parse_timestamp,
 )
 from .repository import persist_batch_anchor
+from .performance_timing import TimingRecorder
 from .storage import RECEIPTS_DIR, load_index, save_index
 
 ANCHORS_FILE = RECEIPTS_DIR / "anchors.json"
@@ -97,11 +99,14 @@ def build_batch_root(receipt_hashes: List[str]) -> str:
     return "0x" + root.hex()
 
 
-def anchor_day(day: str, session_prefix: str | None = None, commitment_profile: str | None = None) -> Tuple[str, int]:
+def anchor_day(day: str, session_prefix: str | None = None, commitment_profile: str | None = None,
+               timing_recorder: TimingRecorder | None = None) -> Tuple[str, int]:
     if db.database_enabled():
         session = db.session_scope()
         try:
-            return anchor_day_from_db(day, session_prefix=session_prefix, db_session=session, commitment_profile=commitment_profile or PROFILE_V1)
+            return anchor_day_from_db(day, session_prefix=session_prefix, db_session=session,
+                                      commitment_profile=commitment_profile or PROFILE_V1,
+                                      timing_recorder=timing_recorder)
         finally:
             session.close()
     if commitment_profile and commitment_profile != LEGACY_PROFILE:
@@ -167,22 +172,32 @@ def anchor_day_from_db(
     session_prefix: str | None = None,
     db_session: Session | None = None,
     commitment_profile: str = PROFILE_V1,
+    timing_recorder: TimingRecorder | None = None,
 ) -> Tuple[str, int]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
 
+    measure = lambda stage, **kwargs: timing_recorder.measure(stage, **kwargs) if timing_recorder else nullcontext()
     try:
+      with measure("batch_anchor_total"):
         if commitment_profile == LEGACY_PROFILE:
-            receipt_hashes, session_ids = _collect_receipt_hashes_from_db(session, day=day, session_prefix=session_prefix)
+            with measure("batch_eligibility_query"):
+                receipt_hashes, session_ids = _collect_receipt_hashes_from_db(session, day=day, session_prefix=session_prefix)
             if not receipt_hashes: raise ValueError(f"No receipts found for day {day}")
-            batch_root = build_batch_root(receipt_hashes)
+            with measure("batch_merkle_construction"):
+                batch_root = build_batch_root(receipt_hashes)
             memberships = _build_anchor_memberships(session_ids, receipt_hashes)
             commitment = None
         elif commitment_profile == PROFILE_V1:
             context = BatchContext.for_day(day)
-            records = _collect_batch_records_from_db(session, day=day, session_prefix=session_prefix)
+            with measure("batch_eligibility_query"):
+                records = _collect_batch_records_from_db(session, day=day, session_prefix=session_prefix)
             if not records: raise ValueError(f"No receipts found for day {day}")
-            commitment = build_batch_commitment(records, context)
+            with measure("batch_context_and_leaf_construction"):
+                # Context normalization and temporal ordering are performed by the profile builder.
+                prepared_records = list(records)
+            with measure("batch_merkle_construction"):
+                commitment = build_batch_commitment(prepared_records, context)
             batch_root = hex32(commitment.batch_root)
             memberships = [
                 {"session_id": record.session_id, "receipt_hash": record.receipt_hash,
@@ -201,7 +216,8 @@ def anchor_day_from_db(
                 raise ClosedBatchMembershipChanged({"added_ids": sorted(set(new_ids)-set(old_ids)), "removed_ids": sorted(set(old_ids)-set(new_ids)), "changed_ids": sorted(k for k in set(old_ids)&set(new_ids) if old_ids[k] != new_ids[k])})
         else:
             raise ValueError(f"Unknown batch commitment profile: {commitment_profile}")
-        persist_batch_anchor(
+        with measure("batch_anchor_persistence"):
+          persist_batch_anchor(
             day=day,
             session_prefix=session_prefix,
             batch_root=batch_root,
@@ -217,8 +233,8 @@ def anchor_day_from_db(
             ordering_rule=ORDERING_RULE if commitment else None,
             odd_node_rule=ODD_NODE_RULE if commitment else None,
             hash_algorithm=BATCH_HASH_ALGORITHM if commitment else None,
-        )
-        session.commit()
+          )
+          session.commit()
         return batch_root, len(receipt_hashes)
     except Exception:
         session.rollback()
