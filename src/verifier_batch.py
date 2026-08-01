@@ -121,6 +121,7 @@ def verify_day_from_db(
         root_match = computed_root == expected_root
         count_match = len(receipt_hashes) == anchor.receipt_count
         result = {
+            "anchor_id": anchor.id,
             "day": day,
             "session_prefix": session_prefix,
             "expected_root": expected_root,
@@ -132,6 +133,7 @@ def verify_day_from_db(
             "match": root_match and count_match,
             "receipt_count": len(receipt_hashes),
             "session_ids": session_ids,
+            "receipt_hashes": receipt_hashes,
         }
         if persist_result:
             persist_batch_verification(result, db_session=session)

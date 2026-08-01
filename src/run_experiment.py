@@ -8,10 +8,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .batch_anchoring import anchor_day
+from .count_reconciliation import (
+    ELIGIBILITY_POLICY,
+    ExperimentCountMismatch,
+    reconcile_experiment_counts,
+    utc_day_bounds,
+    write_count_reconciliation_artifacts,
+)
 from .blockchain.publisher import publish_batch_anchor
 from .blockchain.verifier import verify_on_chain_anchor
 from .charts import generate_charts
@@ -207,7 +214,6 @@ def _finalize_synthetic_sessions(
 ) -> Dict[str, Any]:
     registry = _load_registry(registry_path) if registry_path else None
     rng = random.Random(seed)
-    base_now = _day_end(day)
     session_ids: List[str] = []
     records: List[Dict[str, Any]] = []
     validation_failures: Dict[str, List[str]] = {}
@@ -218,7 +224,7 @@ def _finalize_synthetic_sessions(
             i,
             registry=registry,
             rng=rng,
-            base_now=base_now,
+            target_day=day,
             session_prefix=session_prefix,
             deterministic_tx=True,
             session_mode=session_type,
@@ -239,6 +245,17 @@ def _finalize_synthetic_sessions(
             save_receipt(session["session_id"], receipt, receipt_hash, session)
         session_ids.append(session["session_id"])
     t1 = time.perf_counter()
+
+    day_start, next_day_start = utc_day_bounds(day)
+    outside_day = [
+        {"session_id": record["session"]["session_id"], "start_ts": record["session"]["start_ts"]}
+        for record in records
+        if not day_start <= _parse_ts(record["session"]["start_ts"]).astimezone(timezone.utc) < next_day_start
+    ]
+    if outside_day:
+        raise ValueError(
+            f"Generated sessions outside requested UTC day {day}: {outside_day}"
+        )
 
     return {
         "session_ids": session_ids,
@@ -446,6 +463,17 @@ def _build_run_exports_from_db(
         )
     )
     anchor_lookup = _run_anchor_lookup(db_session, session_prefix)
+    anchor = db_session.scalar(
+        select(BatchAnchor)
+        .where(BatchAnchor.day == day, BatchAnchor.session_prefix == session_prefix, BatchAnchor.batch_root == batch_root)
+        .order_by(BatchAnchor.id.desc())
+    )
+    if not anchor:
+        raise ValueError(f"No stored anchor for run={session_prefix} day={day} root={batch_root}")
+    membership_count = db_session.scalar(
+        select(func.count(BatchAnchorReceipt.id))
+        .where(BatchAnchorReceipt.anchor_id == anchor.id)
+    )
 
     receipts_rows: List[Dict[str, Any]] = []
     sessions_rows: List[Dict[str, Any]] = []
@@ -477,6 +505,8 @@ def _build_run_exports_from_db(
                 "receipt_hash": expected_hash,
                 "merkle_root": receipt_row.merkle_root,
                 "batch_root": anchor.get("batch_root"),
+                "anchored_membership": session_id in anchor_lookup,
+                "batch_verified": session_id in anchor_lookup,
             }
         )
         sessions_rows.append(
@@ -500,6 +530,8 @@ def _build_run_exports_from_db(
                 "match": str(expected_hash == computed_hash),
                 "batch_day": anchor.get("batch_day"),
                 "batch_root": anchor.get("batch_root"),
+                "anchored_membership": session_id in anchor_lookup,
+                "batch_verified": session_id in anchor_lookup,
             }
         )
 
@@ -523,6 +555,7 @@ def _build_run_exports_from_db(
         sessions_rows=sessions_rows,
         meter_rows=meter_rows,
         verify_rows=verify_rows,
+        anchor_receipt_count=int(membership_count or 0),
     )
 
 
@@ -535,6 +568,7 @@ def _write_run_dataset_csvs(
     sessions_rows: List[Dict[str, Any]],
     meter_rows: List[Dict[str, Any]],
     verify_rows: List[Dict[str, Any]],
+    anchor_receipt_count: int | None = None,
 ) -> Dict[str, int]:
     _write_csv(
         run_dir / "datasets" / "receipts.csv",
@@ -552,6 +586,8 @@ def _write_run_dataset_csvs(
             "receipt_hash",
             "merkle_root",
             "batch_root",
+            "anchored_membership",
+            "batch_verified",
         ],
     )
     _write_csv(
@@ -580,6 +616,8 @@ def _write_run_dataset_csvs(
             "expected_hash",
             "computed_hash",
             "batch_root",
+            "anchored_membership",
+            "batch_verified",
         ],
     )
     _write_csv(
@@ -589,7 +627,7 @@ def _write_run_dataset_csvs(
                 "day": day,
                 "session_prefix": session_prefix,
                 "batch_root": batch_root,
-                "receipt_count": len(receipts_rows),
+                "receipt_count": anchor_receipt_count if anchor_receipt_count is not None else len(receipts_rows),
             }
         ],
         ["day", "session_prefix", "receipt_count", "batch_root"],
@@ -701,6 +739,25 @@ def run_experiment(
         batch_root=batch_root,
     )
 
+    reconciliation = None
+    if db.database_enabled():
+        reconciliation_session = db.session_scope()
+        try:
+            requested_ids = [f"{run_id}-{i:04d}" for i in range(1, num_sessions + 1)]
+            reconciliation = reconcile_experiment_counts(
+                run_id=run_id,
+                day=day,
+                requested_session_ids=requested_ids,
+                generated_session_ids=synth["session_ids"],
+                verified_session_ids=verify["session_ids"],
+                db_session=reconciliation_session,
+                anchor_id=verify.get("anchor_id"),
+                exported_dataset_dir=run_dir / "datasets",
+            )
+            write_count_reconciliation_artifacts(reconciliation, run_dir)
+        finally:
+            reconciliation_session.close()
+
     metrics = {
         "run_id": run_id,
         "day": day,
@@ -717,6 +774,18 @@ def run_experiment(
         **synth["validation"],
         "datasets": dataset_counts,
     }
+    if reconciliation:
+        metrics.update({
+            key: reconciliation[key]
+            for key in (
+                "num_sessions_requested", "num_sessions_generated", "num_sessions_persisted",
+                "num_receipts_persisted", "num_receipts_day_eligible", "num_sessions_anchored",
+                "num_memberships_stored", "num_sessions_exported", "num_receipts_exported",
+                "num_verifications_exported", "batch_expected_receipt_count",
+                "batch_actual_membership_count", "batch_receipt_count_match", "count_reconciliation_ok",
+            )
+        })
+        metrics["receipt_count_verified"] = reconciliation["num_receipts_verified"]
     if chain_publish and chain_verify:
         metrics.update(
             {
@@ -745,13 +814,23 @@ def run_experiment(
                 "registry_path": str(registry_path) if registry_path else None,
                 "skip_figures": skip_figures,
                 "publish_chain": publish_chain,
+                "batch_timezone": "UTC",
+                "batch_eligibility_policy": ELIGIBILITY_POLICY,
             },
             "metrics": metrics,
             "session_ids": synth["session_ids"],
+            "count_reconciliation": reconciliation,
         },
         run_dir / "manifest.json",
     )
     _to_json(metrics, run_dir / "metrics.json")
+
+    if reconciliation and not reconciliation["count_reconciliation_ok"]:
+        reasons = "; ".join(reconciliation["failure_reasons"])
+        raise ExperimentCountMismatch(
+            f"Experiment count reconciliation failed: {reasons}. "
+            f"See {run_dir / 'count_reconciliation.json'}"
+        )
 
     return metrics
 

@@ -5,7 +5,7 @@ import json
 import random
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Any
 from urllib.error import HTTPError, URLError
@@ -122,6 +122,7 @@ def generate_session(
     session_mode: str = "auto",
     bidirectional_ratio: float = 0.30,
     discharge_ratio: float = 0.15,
+    target_day: str | date | None = None,
 ) -> Dict[str, Any]:
     """
     Generate a single synthetic session using a V2G-ready schema.
@@ -130,8 +131,13 @@ def generate_session(
     rng = rng or random
     user_id = rng.choice(USERS)
     now = base_now or datetime.now(timezone.utc)
-
-    start_ts = now - timedelta(hours=rng.uniform(0, 24))
+    if target_day is not None:
+        parsed_day = date.fromisoformat(target_day) if isinstance(target_day, str) else target_day
+        window_start = datetime.combine(parsed_day, time.min, tzinfo=timezone.utc)
+        # random() is in [0, 1), so next-day start is never selected.
+        start_ts = window_start + timedelta(seconds=rng.random() * 86400.0)
+    else:
+        start_ts = now - timedelta(hours=rng.uniform(0, 24))
     duration = rng.choice([20, 30, 40, 60, 75])
     interval = 5
     avg_power_kw = rng.choice([7.2, 11.0, 22.0])

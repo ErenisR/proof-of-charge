@@ -304,3 +304,31 @@ These controlled scenarios are not a general attack-detection probability. They
 do not establish source-meter authenticity or prove complete session capture.
 Historical batch or chain commitments are expected to remain unchanged for local
 off-chain mutations that do not alter their stored receipt-hash snapshot.
+
+## UTC daily-batch eligibility and count reconciliation
+
+Daily experiment batches use normalized UTC `start_ts`. Eligibility is the
+half-open interval `[day 00:00:00 UTC, next day 00:00:00 UTC)`. A session remains
+in its start-day batch when its end timestamp crosses midnight. Prefix filtering
+isolates one experiment but does not replace the timestamp rule.
+
+When `src.run_experiment` receives `--day`, synthetic starts are sampled directly
+inside that interval. The same seed, day, run ID, mode, and workload size remain
+deterministic. Generation fails if any normalized start lies outside the requested
+day.
+
+Every PostgreSQL experiment writes `count_reconciliation.json`,
+`count_reconciliation.csv`, and `count_reconciliation.md`. These compare exact ID
+sets—not just counts—across requested, generated, persisted, eligible, anchored,
+verified, and exported stages. Any missing or unexpected ID raises
+`ExperimentCountMismatch` after diagnostic artifacts and metrics are written.
+A matching batch root is not sufficient for experiment success.
+
+Reproduce the corrected seed-42 mixed 1000-session run with:
+
+```bash
+.venv/bin/python -m src.run_experiment 1000 \
+  --day 2026-07-15 --seed 42 \
+  --run-id reviewer3_corrected_1000_20260801 \
+  --session-type all --skip-figures
+```

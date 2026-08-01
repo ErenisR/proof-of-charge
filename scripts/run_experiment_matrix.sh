@@ -143,6 +143,14 @@ fields = [
     "finalization_avg_sec",
     "batch_root_match",
     "receipt_count_verified",
+    "num_sessions_persisted",
+    "num_receipts_persisted",
+    "num_receipts_day_eligible",
+    "num_sessions_anchored",
+    "num_memberships_stored",
+    "num_sessions_exported",
+    "num_receipts_exported",
+    "count_reconciliation_ok",
     "validation_failed_sessions",
     "validation_failure_count",
     "charge_only_sessions",
@@ -162,6 +170,8 @@ for mode in modes:
     for size in sizes:
         run_id = f"{matrix_id}_{mode}_{size}"
         metrics = json.loads((runs_dir / run_id / "metrics.json").read_text(encoding="utf-8"))
+        if metrics.get("count_reconciliation_ok") is not True:
+            raise SystemExit(f"Count reconciliation failed for {run_id}; refusing matrix summary/plots")
         datasets = metrics.get("datasets") or {}
         rows.append(
             {
@@ -177,6 +187,14 @@ for mode in modes:
                 "finalization_avg_sec": metrics.get("t_finalize_avg_sec"),
                 "batch_root_match": metrics.get("batch_root_match"),
                 "receipt_count_verified": metrics.get("receipt_count_verified"),
+                "num_sessions_persisted": metrics.get("num_sessions_persisted"),
+                "num_receipts_persisted": metrics.get("num_receipts_persisted"),
+                "num_receipts_day_eligible": metrics.get("num_receipts_day_eligible"),
+                "num_sessions_anchored": metrics.get("num_sessions_anchored"),
+                "num_memberships_stored": metrics.get("num_memberships_stored"),
+                "num_sessions_exported": metrics.get("num_sessions_exported"),
+                "num_receipts_exported": metrics.get("num_receipts_exported"),
+                "count_reconciliation_ok": metrics.get("count_reconciliation_ok"),
                 "validation_failed_sessions": metrics.get("validation_failed_sessions"),
                 "validation_failure_count": metrics.get("validation_failure_count"),
                 "charge_only_sessions": metrics.get("charge_only_sessions"),
@@ -205,6 +223,8 @@ manifest = {
     "modes": modes,
     "sizes": [int(size) for size in sizes],
     "runs": [row["run_id"] for row in rows],
+    "batch_timezone": "UTC",
+    "batch_eligibility_policy": "Receipt start_ts is in [day 00:00 UTC, next day 00:00 UTC).",
 }
 (matrix_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
 
@@ -238,16 +258,16 @@ lines = [
     "",
     "## Summary",
     "",
-    "| Run | Mode | Sessions | Meter Values | Finalize Total s | Finalize Avg s | Batch Match | Validation Failures | Chain Match | Gas Used |",
-    "| --- | --- | ---: | ---: | ---: | ---: | --- | ---: | --- | ---: |",
+    "| Run | Mode | Requested | Persisted receipts | Anchored | Verified | Reconciled | Finalize Total s | Batch Match |",
+    "| --- | --- | ---: | ---: | ---: | ---: | --- | ---: | --- |",
 ]
 for row in rows:
     values = {key: fmt(value) for key, value in row.items()}
     values["session_type_mode"] = display_mode(row["session_type_mode"])
     lines.append(
-        "| {run_id} | {session_type_mode} | {sessions} | {meter_values} | {finalization_total_sec} | "
-        "{finalization_avg_sec} | {batch_root_match} | {validation_failure_count} | "
-        "{chain_root_match} | {chain_gas_used} |".format(**values)
+        "| {run_id} | {session_type_mode} | {sessions} | {num_receipts_persisted} | "
+        "{num_sessions_anchored} | {receipt_count_verified} | {count_reconciliation_ok} | "
+        "{finalization_total_sec} | {batch_root_match} |".format(**values)
     )
 
 lines.extend(
