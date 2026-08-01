@@ -1,0 +1,33 @@
+{
+  "alembic_migration_revision": "20260801_0005",
+  "anvil_chain_id": "31337",
+  "anvil_mining_mode": "automatic local mining",
+  "anvil_version": "anvil Version: 1.7.1-Homebrew",
+  "architecture": "arm64",
+  "batch_commitment_profile": "poc-batch-merkle-v1",
+  "benchmark_command": "scripts/run_reviewer3_performance_benchmark.py --day 2026-07-25 --sizes 10 50 100 500 1000 --seeds 42 43 44 45 46 47 48 49 50 51 --session-type all --warmup-runs 1 --publish-chain --reset-database-between-runs --orchestration-seed 20260801 --output-dir results/reviewer3_performance --benchmark-id reviewer3_performance_final",
+  "canonicalization_profile": "poc-c14n-v1",
+  "cast_version": "cast Version: 1.7.1-Homebrew",
+  "cpu_model": "Apple M1 Max",
+  "database_connection_mode": "SQLAlchemy/psycopg TCP",
+  "database_container_configuration": {
+    "container_port": 5432,
+    "host_port": 5433,
+    "image": "postgres:16",
+    "persistence": "named Docker volume postgres_data"
+  },
+  "dirty_worktree": false,
+  "docker_compose_version": "Docker Compose version v2.15.1",
+  "docker_version": "Docker version 20.10.22, build 3a2c30b",
+  "local_receipt_writing_disabled": true,
+  "logical_core_count": 10,
+  "operating_system": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "physical_core_count": 10,
+  "postgresql_client_version": "psql (PostgreSQL) 14.17 (Homebrew)",
+  "postgresql_version": "16.14 (Debian 16.14-1.pgdg13+1)",
+  "python_version": "3.13.3",
+  "solc_version": null,
+  "source_commit_sha": "03e252d0480bc21633673a9452060c8792bef176",
+  "timezone": "UTC experiment day; host=system default",
+  "total_ram_bytes": 34359738368
+}

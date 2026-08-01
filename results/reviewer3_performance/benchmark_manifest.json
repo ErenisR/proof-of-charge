@@ -1,0 +1,349 @@
+{
+  "artifact_commit_sha": null,
+  "artifact_sha256": {
+    "batch_stage_observations.csv": "0440e16ce979186e095dfc9de6ec85de21fb79e446a5a635b9b6c48f6d227d7c",
+    "blockchain_stage_observations.csv": "4f1062f5a12c83158aa18b241e952f0fee243bd100c4547a6439df7f97e8dc84",
+    "environment.json": "bd0e0d649b7d253e986d54c77d1405e0a7b643f876e48a861d1781e0509437a0",
+    "execution_order.csv": "381072366ca94222b21603c56603fa7f673445780462a9490644ecb84bd064e2",
+    "figures/batch_stages.png": "0fad798e7621b8254942f28ad1e683c2f139fef2a63778a01070faa2cfd75590",
+    "figures/blockchain_stages.png": "18781f5adaf8f8fb5795508b1759650406d88d13a4904342635c14858d5ee475",
+    "figures/receipt_pipeline_ci95.png": "488aeda25732f8f1ff80875d36e4c1bf427539311577c2beb2cc6dd2ef7457b6",
+    "figures/receipt_pipeline_percentiles.png": "6ce6eca5a2b99b3311237056894a02b5a70b849ccfa26eb51d069f1b840ed29f",
+    "figures/receipt_stage_separation.png": "1d021431c632383aee15a764fb440818592364a14c5b235b035ab40826c94bba",
+    "figures/receipt_throughput_ci95.png": "35e27951ef62f96f70e0b1c36fc19aefae2ded2748b6584215330ba443aa472f",
+    "measured_runs.csv": "3114b24c631dfa415c621159dc98a23a9bd43db7f7c90d96fb0b5e4d0b4d8360",
+    "receipt_stage_observations.csv": "ec22428bd36160a66db6ee3002008d34e815bedb9e0af2bc3d4424a802f28675",
+    "reviewer3_performance_report.md": "56c044be1beceae0e9e1fe104a6db115938beb133f7f9d5a6bfa373e4da8dd11",
+    "run_level_metrics.csv": "3114b24c631dfa415c621159dc98a23a9bd43db7f7c90d96fb0b5e4d0b4d8360",
+    "summary_by_stage.csv": "86d122b28e19a0c7fb578b62d63458180dbec04cb50e7807a82d12676f0ddfad",
+    "summary_by_workload.csv": "6f7a9db8ce10fa6bd4f0edc2e996744d56e2b48daf241b249dbb78c055d3f3e4",
+    "test_execution.txt": "c720f6754d212a7981147f3626af28825ccea3b5c852bdfc63487d506823e392",
+    "warmup_runs.csv": "a2e4c0daf5fa133b3513db4ae690f191420bd180b9833b8b3d33b9e461ffbb1a"
+  },
+  "benchmark_command": "scripts/run_reviewer3_performance_benchmark.py --day 2026-07-25 --sizes 10 50 100 500 1000 --seeds 42 43 44 45 46 47 48 49 50 51 --session-type all --warmup-runs 1 --publish-chain --reset-database-between-runs --orchestration-seed 20260801 --output-dir results/reviewer3_performance --benchmark-id reviewer3_performance_final",
+  "completed_measured_runs": 50,
+  "configuration_sha256": "229167a99137bc40879a3f89f3a31592e084f0660fb67d3258174e934ee1f512",
+  "dirty_worktree": false,
+  "environment": {
+    "alembic_migration_revision": "20260801_0005",
+    "anvil_chain_id": "31337",
+    "anvil_mining_mode": "automatic local mining",
+    "anvil_version": "anvil Version: 1.7.1-Homebrew",
+    "architecture": "arm64",
+    "batch_commitment_profile": "poc-batch-merkle-v1",
+    "benchmark_command": "scripts/run_reviewer3_performance_benchmark.py --day 2026-07-25 --sizes 10 50 100 500 1000 --seeds 42 43 44 45 46 47 48 49 50 51 --session-type all --warmup-runs 1 --publish-chain --reset-database-between-runs --orchestration-seed 20260801 --output-dir results/reviewer3_performance --benchmark-id reviewer3_performance_final",
+    "canonicalization_profile": "poc-c14n-v1",
+    "cast_version": "cast Version: 1.7.1-Homebrew",
+    "cpu_model": "Apple M1 Max",
+    "database_connection_mode": "SQLAlchemy/psycopg TCP",
+    "database_container_configuration": {
+      "container_port": 5432,
+      "host_port": 5433,
+      "image": "postgres:16",
+      "persistence": "named Docker volume postgres_data"
+    },
+    "dirty_worktree": false,
+    "docker_compose_version": "Docker Compose version v2.15.1",
+    "docker_version": "Docker version 20.10.22, build 3a2c30b",
+    "local_receipt_writing_disabled": true,
+    "logical_core_count": 10,
+    "operating_system": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+    "physical_core_count": 10,
+    "postgresql_client_version": "psql (PostgreSQL) 14.17 (Homebrew)",
+    "postgresql_version": "16.14 (Debian 16.14-1.pgdg13+1)",
+    "python_version": "3.13.3",
+    "solc_version": null,
+    "source_commit_sha": "03e252d0480bc21633673a9452060c8792bef176",
+    "timezone": "UTC experiment day; host=system default",
+    "total_ram_bytes": 34359738368
+  },
+  "expected_measured_runs": 50,
+  "failed_runs": 0,
+  "implementation_file_sha256": {
+    "scripts/run_reviewer3_performance_benchmark.py": "191113aef99eeabe5a8627919c38285c6a33af5e4355cdecf1e052e5b3792bc7",
+    "src/batch_anchoring.py": "db7b2ad2a3c206c7ec9ee38b9370f1c71ddad54585a4c4fa017f50db3da9369c",
+    "src/blockchain/publisher.py": "2ea8b42783fd2cd9e837632b2f1b0feb702cebed683d34cb793311a6486e0c4f",
+    "src/blockchain/verifier.py": "82da5469a14151a3870d931ec81d6370ff215e5d7dca6b9532003c4ab9210417",
+    "src/performance_benchmark.py": "08e2d943a45e397c160bf81964a68c0e3350f4eb07d60be045f5136fae644320",
+    "src/performance_timing.py": "9e7d01ce9ecca325b435f7428a4e618a4c65f70f8497db43217005b058f5a80c",
+    "src/receipt_builder.py": "1c7d4630691605a944fe1259a60c40165625dcc1d74502f658a79f6216bd8684",
+    "src/run_experiment.py": "abe63b181dca78eeed8b07e6c8f5b744c169a5b6f4ac8a8eb17137267b3b110d",
+    "src/verifier_batch.py": "667911592d70612a4f4357b5cdf00aa3eff2f0b38004ab0e58759991545acacf"
+  },
+  "implementation_source_commit_sha": "03e252d0480bc21633673a9452060c8792bef176",
+  "orchestration_seed": 20260801,
+  "randomized_execution_order": [
+    {
+      "repetition": 2,
+      "seed": 43,
+      "workload": 1000
+    },
+    {
+      "repetition": 4,
+      "seed": 45,
+      "workload": 1000
+    },
+    {
+      "repetition": 6,
+      "seed": 47,
+      "workload": 100
+    },
+    {
+      "repetition": 3,
+      "seed": 44,
+      "workload": 500
+    },
+    {
+      "repetition": 4,
+      "seed": 45,
+      "workload": 10
+    },
+    {
+      "repetition": 4,
+      "seed": 45,
+      "workload": 500
+    },
+    {
+      "repetition": 7,
+      "seed": 48,
+      "workload": 100
+    },
+    {
+      "repetition": 9,
+      "seed": 50,
+      "workload": 10
+    },
+    {
+      "repetition": 5,
+      "seed": 46,
+      "workload": 1000
+    },
+    {
+      "repetition": 10,
+      "seed": 51,
+      "workload": 50
+    },
+    {
+      "repetition": 6,
+      "seed": 47,
+      "workload": 50
+    },
+    {
+      "repetition": 1,
+      "seed": 42,
+      "workload": 10
+    },
+    {
+      "repetition": 8,
+      "seed": 49,
+      "workload": 100
+    },
+    {
+      "repetition": 2,
+      "seed": 43,
+      "workload": 500
+    },
+    {
+      "repetition": 7,
+      "seed": 48,
+      "workload": 50
+    },
+    {
+      "repetition": 6,
+      "seed": 47,
+      "workload": 10
+    },
+    {
+      "repetition": 1,
+      "seed": 42,
+      "workload": 100
+    },
+    {
+      "repetition": 10,
+      "seed": 51,
+      "workload": 500
+    },
+    {
+      "repetition": 10,
+      "seed": 51,
+      "workload": 100
+    },
+    {
+      "repetition": 4,
+      "seed": 45,
+      "workload": 50
+    },
+    {
+      "repetition": 8,
+      "seed": 49,
+      "workload": 500
+    },
+    {
+      "repetition": 2,
+      "seed": 43,
+      "workload": 100
+    },
+    {
+      "repetition": 5,
+      "seed": 46,
+      "workload": 100
+    },
+    {
+      "repetition": 1,
+      "seed": 42,
+      "workload": 1000
+    },
+    {
+      "repetition": 9,
+      "seed": 50,
+      "workload": 1000
+    },
+    {
+      "repetition": 10,
+      "seed": 51,
+      "workload": 1000
+    },
+    {
+      "repetition": 3,
+      "seed": 44,
+      "workload": 10
+    },
+    {
+      "repetition": 7,
+      "seed": 48,
+      "workload": 500
+    },
+    {
+      "repetition": 1,
+      "seed": 42,
+      "workload": 500
+    },
+    {
+      "repetition": 9,
+      "seed": 50,
+      "workload": 500
+    },
+    {
+      "repetition": 8,
+      "seed": 49,
+      "workload": 10
+    },
+    {
+      "repetition": 3,
+      "seed": 44,
+      "workload": 100
+    },
+    {
+      "repetition": 9,
+      "seed": 50,
+      "workload": 50
+    },
+    {
+      "repetition": 2,
+      "seed": 43,
+      "workload": 50
+    },
+    {
+      "repetition": 9,
+      "seed": 50,
+      "workload": 100
+    },
+    {
+      "repetition": 1,
+      "seed": 42,
+      "workload": 50
+    },
+    {
+      "repetition": 5,
+      "seed": 46,
+      "workload": 10
+    },
+    {
+      "repetition": 2,
+      "seed": 43,
+      "workload": 10
+    },
+    {
+      "repetition": 4,
+      "seed": 45,
+      "workload": 100
+    },
+    {
+      "repetition": 3,
+      "seed": 44,
+      "workload": 50
+    },
+    {
+      "repetition": 7,
+      "seed": 48,
+      "workload": 1000
+    },
+    {
+      "repetition": 5,
+      "seed": 46,
+      "workload": 50
+    },
+    {
+      "repetition": 7,
+      "seed": 48,
+      "workload": 10
+    },
+    {
+      "repetition": 10,
+      "seed": 51,
+      "workload": 10
+    },
+    {
+      "repetition": 8,
+      "seed": 49,
+      "workload": 1000
+    },
+    {
+      "repetition": 5,
+      "seed": 46,
+      "workload": 500
+    },
+    {
+      "repetition": 8,
+      "seed": 49,
+      "workload": 50
+    },
+    {
+      "repetition": 3,
+      "seed": 44,
+      "workload": 1000
+    },
+    {
+      "repetition": 6,
+      "seed": 47,
+      "workload": 1000
+    },
+    {
+      "repetition": 6,
+      "seed": 47,
+      "workload": 500
+    }
+  ],
+  "repetitions_per_workload": 10,
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51
+  ],
+  "validation_status": "pass",
+  "warmup_count_per_workload": 1,
+  "workload_sizes": [
+    10,
+    50,
+    100,
+    500,
+    1000
+  ]
+}

@@ -1,0 +1,17 @@
+Reviewer 3 performance validation test execution
+Execution date: 2026-08-01
+
+Command:
+PYTHONPATH=. .venv/bin/pytest -q tests/test_performance_timing.py tests/test_receipt_builder.py tests/test_receipt_canonicalization.py tests/test_batch_merkle_profile.py tests/test_count_reconciliation.py tests/blockchain/test_publisher_verifier.py
+
+Result:
+.....................................................                    [100%]
+53 passed in 1.03s
+
+Command:
+PYTHONPATH=. .venv/bin/pytest -q
+
+Result:
+........................................................................ [ 67%]
+...................................                                      [100%]
+107 passed in 2.09s
