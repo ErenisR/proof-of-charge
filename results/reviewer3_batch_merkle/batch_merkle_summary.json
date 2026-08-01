@@ -1,0 +1,60 @@
+{
+  "anchor_id": 64,
+  "batch_root": "0x2914c44d6070d5500f5df5f5abe2ec20efcbb7bd5da8d6470b8fa275ae73c3e8",
+  "day": "2026-07-22",
+  "domain_separated_profile_match": true,
+  "duplicate_rejected": true,
+  "hash_algorithm": "sha-256",
+  "historical_root_unchanged_after_late_insertion": true,
+  "large_proof_sample": {
+    "commitment_build_seconds": 0.009607041021808982,
+    "leaf_count": 1000,
+    "proof_generation_seconds": 6.049999501556158e-05,
+    "proof_sibling_count": 10,
+    "proof_valid": true,
+    "proof_verification_seconds": 5.741603672504425e-05,
+    "serialized_proof_size_bytes": 2064,
+    "tree_depth": 10
+  },
+  "late_insertion_detected": true,
+  "leaf_count": 5,
+  "membership_audit": {
+    "anchor_id": 64,
+    "changed_receipt_hash_ids": [],
+    "changed_start_timestamp_ids": [],
+    "commitment_profile": "poc-batch-merkle-v1",
+    "current_count": 6,
+    "currently_eligible_ids": [
+      "reviewer3_batch_merkle_validation_20260801_v3-0001",
+      "reviewer3_batch_merkle_validation_20260801_v3-0002",
+      "reviewer3_batch_merkle_validation_20260801_v3-0003",
+      "reviewer3_batch_merkle_validation_20260801_v3-0004",
+      "reviewer3_batch_merkle_validation_20260801_v3-0005",
+      "reviewer3_batch_merkle_validation_20260801_v3-0006"
+    ],
+    "duplicate_ids": [],
+    "late_or_unanchored_ids": [
+      "reviewer3_batch_merkle_validation_20260801_v3-0006"
+    ],
+    "limitation": "Cannot detect a physical session that never entered the platform; production completeness requires an external authoritative register.",
+    "membership_snapshot_match": false,
+    "removed_or_missing_ids": [],
+    "stored_count": 5,
+    "stored_membership_ids": [
+      "reviewer3_batch_merkle_validation_20260801_v3-0001",
+      "reviewer3_batch_merkle_validation_20260801_v3-0003",
+      "reviewer3_batch_merkle_validation_20260801_v3-0004",
+      "reviewer3_batch_merkle_validation_20260801_v3-0002",
+      "reviewer3_batch_merkle_validation_20260801_v3-0005"
+    ]
+  },
+  "membership_snapshot_match_after_late_insertion": false,
+  "modified_proof_rejected": true,
+  "profile": "poc-batch-merkle-v1",
+  "proofs_generated": 5,
+  "proofs_verified": 5,
+  "run_id": "reviewer3_batch_merkle_validation_20260801_v3",
+  "seed": 42,
+  "temporal_ordering_match": true,
+  "validation_passed": true
+}

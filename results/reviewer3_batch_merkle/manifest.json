@@ -1,0 +1,55 @@
+{
+  "command_used": "scripts/run_reviewer3_batch_merkle_validation.py --day 2026-07-22 --seed 42 --run-id reviewer3_batch_merkle_validation_20260801_v3 --output-dir results/reviewer3_batch_merkle",
+  "dirty_worktree_flag": true,
+  "generated_artifacts": {
+    "results/reviewer3_batch_merkle/batch_merkle_cases.csv": {
+      "sha256": "9689eafc36e867a52e315df7d621c83209abd45b1eb187bf2b569d0a56adfb5a"
+    },
+    "results/reviewer3_batch_merkle/batch_merkle_report.md": {
+      "sha256": "59a1d377b8972772202961db636ecd391a8a58840aa293211f411d84f0799b35"
+    },
+    "results/reviewer3_batch_merkle/batch_merkle_summary.json": {
+      "sha256": "f42670257d22d269abec53bf966954def831a726db4f51bff74314e2ee14f58d"
+    },
+    "results/reviewer3_batch_merkle/membership_proofs/modified_invalid_proof.json": {
+      "sha256": "5fb34d093c8b1d5bbd9f1650ca4746f3f85408a46c5a439cafc68e350d2bc3c8"
+    },
+    "results/reviewer3_batch_merkle/membership_proofs/reviewer3_batch_merkle_validation_20260801_v3-0001.json": {
+      "sha256": "61d7588f107f954f3a4522f5de89b0edb61981c4c5fd8585676b8026e0efaf5e"
+    },
+    "results/reviewer3_batch_merkle/membership_proofs/reviewer3_batch_merkle_validation_20260801_v3-0002.json": {
+      "sha256": "4fbca2cc30a8e2c4ae453c51e647458aa0b9446b1e1d6a7e817c75fa2f4719ee"
+    },
+    "results/reviewer3_batch_merkle/membership_proofs/reviewer3_batch_merkle_validation_20260801_v3-0003.json": {
+      "sha256": "c61032cba28bca8f2e24170642522476703c1a54ef43371430022cc698b3b602"
+    },
+    "results/reviewer3_batch_merkle/membership_proofs/reviewer3_batch_merkle_validation_20260801_v3-0004.json": {
+      "sha256": "4997c58a48cce2be8d5f7889910a6ddd05aa5ccd756a290d9d04aee85f0a1719"
+    },
+    "results/reviewer3_batch_merkle/membership_proofs/reviewer3_batch_merkle_validation_20260801_v3-0005.json": {
+      "sha256": "4b71b3a0d66904c82ef54f81d53a56c2fee93e07badf90e2ad11fc45983b0447"
+    }
+  },
+  "hash_algorithm": "sha-256",
+  "implementation_files": {
+    "src/batch_anchoring.py": {
+      "sha256": "f33800fce991af4114b6afd2442895ef70c597dd4c08a3d718cd10c4a3f35938"
+    },
+    "src/batch_merkle.py": {
+      "sha256": "16fd1b4bf81c330457f137eb81f2041a1c856831e99fc8361bcedae27df708ee"
+    },
+    "src/batch_service.py": {
+      "sha256": "baaf28b7dc4473e076c22a40f7629e548bc38f083a2a70cad49c842c3255d066"
+    },
+    "src/verifier_batch.py": {
+      "sha256": "ccce3ece89daf00d1237ca8982035be022fbb87a340ea2f90e48f92fe60503ac"
+    }
+  },
+  "migration_revision": "20260801_0005",
+  "operating_system": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "postgresql_version": "16.14 (Debian 16.14-1.pgdg13+1)",
+  "profile_identifier": "poc-batch-merkle-v1",
+  "python_version": "3.13.3",
+  "source_commit_sha": "6f5bbb6e7508b572dce53d978ff9301436f1113a",
+  "validation_passed": true
+}

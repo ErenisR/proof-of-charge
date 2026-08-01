@@ -1,0 +1,39 @@
+{
+  "context": {
+    "batch_day": "2026-07-22",
+    "eligibility_rule": "normalized receipt start_ts in [window_start, window_end)",
+    "hash_algorithm": "sha-256",
+    "odd_node_rule": "duplicate-last",
+    "ordering_rule": "start_ts, session_id, receipt_hash",
+    "profile": "poc-batch-merkle-v1",
+    "timezone": "UTC",
+    "window_end": "2026-07-23T00:00:00.000000Z",
+    "window_start": "2026-07-22T00:00:00.000000Z"
+  },
+  "context_hash": "0x4c422f3b95f2b1d60c056a4f44e84a1ab75b867fea6724574615bcbb66b573f0",
+  "expected_batch_root": "0x2914c44d6070d5500f5df5f5abe2ec20efcbb7bd5da8d6470b8fa275ae73c3e8",
+  "leaf_count": 5,
+  "leaf_hash": "0x98c8e74f6d5b66609347b8570e37ad2ff1a5905af7e5235b0b2de0b312212171",
+  "leaf_index": 4,
+  "normalized_start_ts": "2026-07-22T20:13:42.405904Z",
+  "profile": "poc-batch-merkle-v1",
+  "receipt_hash": "0xeefa3fbcf15ac3f645183b66f091dee5c51ff66a8319eaa0db60a9a72f252f27",
+  "session_id": "reviewer3_batch_merkle_validation_20260801_v3-0005",
+  "siblings": [
+    {
+      "direction": "right",
+      "hash": "0x98c8e74f6d5b66609347b8570e37ad2ff1a5905af7e5235b0b2de0b312212171",
+      "odd_duplicate": true
+    },
+    {
+      "direction": "right",
+      "hash": "0x350cf8d371532d8ae70812acca4ab95f3a89ee63f2ff9a356ac503a816098536",
+      "odd_duplicate": true
+    },
+    {
+      "direction": "left",
+      "hash": "0x2dfa48c5273dc2be25f39dc5abeabafd8c993729e09877f1da551c669dc69115",
+      "odd_duplicate": false
+    }
+  ]
+}
