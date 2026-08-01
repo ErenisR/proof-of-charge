@@ -42,6 +42,13 @@ def database_counts() -> dict[str, int]:
     finally: session.close()
 
 
+def postgres_server_version() -> str | None:
+    session = db.session_scope()
+    try: return str(session.execute(text("SHOW server_version")).scalar())
+    except Exception: return None
+    finally: session.close()
+
+
 def make_figures(summary: list[dict], stage_summary: list[dict], output: Path) -> None:
     import matplotlib.pyplot as plt
     figures = output / "figures"; figures.mkdir(exist_ok=True)
@@ -85,6 +92,12 @@ def main() -> int:
     output=args.output_dir.resolve(); output.mkdir(parents=True,exist_ok=False); os.environ["WRITE_LOCAL_RECEIPTS"]="0"
     sha=git("rev-parse","HEAD"); dirty=bool(git("status","--porcelain")); dbcheck=db.check_database()
     environment=collect_environment(command=command,source_sha=sha,dirty=dirty,migration_revision=dbcheck["current_revision"])
+    environment["postgresql_client_version"] = environment.get("postgresql_version")
+    environment["postgresql_version"] = postgres_server_version()
+    environment["database_container_configuration"] = {
+        "image": "postgres:16", "host_port": 5433, "container_port": 5432,
+        "persistence": "named Docker volume postgres_data",
+    }
     (output/"environment.json").write_text(json.dumps(environment,indent=2,sort_keys=True)+"\n")
     order=randomized_execution_order(args.sizes,args.seeds,args.orchestration_seed)
     write_csv(output/"execution_order.csv",[{"execution_index":i+1,"workload_size":s,"repetition":r,"seed":seed} for i,(s,r,seed) in enumerate(order)])
@@ -105,7 +118,7 @@ def main() -> int:
         observations.extend(obs)
         pipeline=[o["duration_ns"] for o in obs if o["stage"]=="receipt_pipeline_total"]
         pipeline_total=sum(pipeline); valid=not failure and bool(metrics.get("count_reconciliation_ok")) and bool(metrics.get("batch_root_match")) and (not args.publish_chain or (metrics.get("chain_root_match") and metrics.get("chain_receipt_count_match") and metrics.get("chain_status")==1))
-        row={"execution_index":execution_index,"run_id":run_id,"warmup":warmup,"workload_size":size,"repetition":repetition,"seed":seed,"started_at_utc":started_at,"ended_at_utc":utc_now(),"process_id":os.getpid(),"load_average":list(os.getloadavg()) if hasattr(os,"getloadavg") else None,"database_counts_before":before,"database_counts_after":after,"end_to_end_duration_ns":elapsed,"valid":valid,"failure":failure,"count_reconciliation_ok":bool(metrics.get("count_reconciliation_ok")),"batch_root_match":bool(metrics.get("batch_root_match")),"chain_root_match":bool(metrics.get("chain_root_match")) if args.publish_chain else None,"chain_receipt_count_match":bool(metrics.get("chain_receipt_count_match")) if args.publish_chain else None,"chain_status":metrics.get("chain_status"),"receipt_pipeline_total_ns":pipeline_total,"receipt_pipeline_mean_ms":pipeline_total/size/1e6 if size else 0,"receipt_throughput_per_sec":size/(pipeline_total/1e9) if pipeline_total else 0,"num_meter_values":metrics.get("num_meter_values"),"session_type_composition":{k:v for k,v in metrics.items() if k.startswith("num_sessions_")},"chain_gas_used":metrics.get("chain_gas_used"),"chain_transaction_fee_wei":metrics.get("chain_transaction_fee_wei"),"chain_tx":metrics.get("chain_tx")}
+        row={"execution_index":execution_index,"run_id":run_id,"warmup":warmup,"workload_size":size,"repetition":repetition,"seed":seed,"started_at_utc":started_at,"ended_at_utc":utc_now(),"process_id":os.getpid(),"load_average":list(os.getloadavg()) if hasattr(os,"getloadavg") else None,"database_counts_before":before,"database_counts_after":after,"end_to_end_duration_ns":elapsed,"valid":valid,"failure":failure,"count_reconciliation_ok":bool(metrics.get("count_reconciliation_ok")),"batch_root_match":bool(metrics.get("batch_root_match")),"chain_root_match":bool(metrics.get("chain_root_match")) if args.publish_chain else None,"chain_receipt_count_match":bool(metrics.get("chain_receipt_count_match")) if args.publish_chain else None,"chain_status":metrics.get("chain_status"),"receipt_pipeline_total_ns":pipeline_total,"receipt_pipeline_mean_ms":pipeline_total/size/1e6 if size else 0,"receipt_throughput_per_sec":size/(pipeline_total/1e9) if pipeline_total else 0,"num_meter_values":after["meter_values"],"session_type_composition":metrics.get("session_type_counts"),"chain_gas_used":metrics.get("chain_gas_used"),"chain_transaction_fee_wei":metrics.get("chain_transaction_fee_wei"),"chain_tx":metrics.get("chain_tx"),"chain_block_number":metrics.get("chain_block_number")}
         (warmups if warmup else runs).append(row)
         write_csv(output/"warmup_runs.csv",warmups); write_csv(output/"measured_runs.csv",runs)
         if not valid: raise RuntimeError(f"Benchmark correctness gate failed for {run_id}: {failure or row}")
