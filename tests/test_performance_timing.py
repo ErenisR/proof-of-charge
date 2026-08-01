@@ -42,6 +42,12 @@ def test_random_order_is_deterministic_and_records_multiple_seeds():
     assert {seed for _,_,seed in first}=={42,43}
 
 
+def test_benchmark_namespaces_are_expected_to_be_unique():
+    benchmark_ids = ["reviewer3_performance_smoke", "reviewer3_performance"]
+    ids = {f"{benchmark}_n0010_r01_seed42" for benchmark in benchmark_ids}
+    assert len(ids) == len(benchmark_ids)
+
+
 def test_sample_sd_student_t_ci_known_vector():
     result=summarize([1,2,3,4,5,6,7,8,9,10])
     assert result["sample_sd"]==pytest.approx(3.0276503541)

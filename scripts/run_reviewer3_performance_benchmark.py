@@ -102,9 +102,11 @@ def main() -> int:
     order=randomized_execution_order(args.sizes,args.seeds,args.orchestration_seed)
     write_csv(output/"execution_order.csv",[{"execution_index":i+1,"workload_size":s,"repetition":r,"seed":seed} for i,(s,r,seed) in enumerate(order)])
     observations=[]; runs=[]; warmups=[]
-    jobs=[(s,0,args.seeds[0],True) for s in args.sizes for _ in range(args.warmup_runs)]+[(s,r,seed,False) for s,r,seed in order]
+    jobs=[(s,warmup_index + 1,args.seeds[0],True) for s in args.sizes for warmup_index in range(args.warmup_runs)]+[(s,r,seed,False) for s,r,seed in order]
     for execution_index,(size,repetition,seed,warmup) in enumerate(jobs,1):
-        reset_database(); before=database_counts(); run_id=(f"{args.benchmark_id}_warmup_n{size:04d}" if warmup else f"reviewer3_perf_n{size:04d}_r{repetition:02d}_seed{seed}")
+        reset_database(); before=database_counts()
+        run_id=(f"{args.benchmark_id}_warmup_n{size:04d}_w{repetition:02d}"
+                if warmup else f"{args.benchmark_id}_n{size:04d}_r{repetition:02d}_seed{seed}")
         existing=ROOT/"results"/run_id
         if existing.exists(): shutil.rmtree(existing)
         recorder=TimingRecorder(benchmark_id=args.benchmark_id,run_id=run_id,repetition_index=None if warmup else repetition,seed=seed,workload_size=size,session_mode=args.session_type)
