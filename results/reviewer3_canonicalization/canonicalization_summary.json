@@ -1,0 +1,33 @@
+{
+  "all_canonical_bytes_match": true,
+  "all_hashes_match": true,
+  "canonicalization_profile": "poc-c14n-v1",
+  "external_hash_format": "0x-prefixed lowercase hexadecimal",
+  "generated_at_utc": "2026-08-01T10:39:30.817431Z",
+  "hash_algorithm": "sha-256",
+  "javascript_implementation_executed": true,
+  "python_implementation_executed": true,
+  "validation_passed": true,
+  "vector_results": [
+    {
+      "canonical_byte_length": 932,
+      "cross_language_bytes_match": true,
+      "cross_language_hash_match": true,
+      "expected_hash": "0x091ee8ca80f9beb9f99b86f43abb33b5c97dc919f313b93d40f935169f2500eb",
+      "javascript_expected_bytes_match": true,
+      "javascript_hash": "0x091ee8ca80f9beb9f99b86f43abb33b5c97dc919f313b93d40f935169f2500eb",
+      "no_insignificant_whitespace": true,
+      "no_trailing_newline": true,
+      "profile": "poc-c14n-v1",
+      "python_expected_bytes_match": true,
+      "python_hash": "0x091ee8ca80f9beb9f99b86f43abb33b5c97dc919f313b93d40f935169f2500eb",
+      "status": "pass",
+      "utf8_without_bom": true,
+      "vector_name": "offset-unicode-rounding-array-order"
+    }
+  ],
+  "vectors_defined": 1,
+  "vectors_executed": 1,
+  "vectors_failed": 0,
+  "vectors_passed": 1
+}

@@ -209,7 +209,12 @@ Roadmap.md
 receipts/
 samples/
 exports/
-results/
+results/*
+!results/reviewer3_canonicalization/
+!results/reviewer3_canonicalization/canonicalization_summary.json
+!results/reviewer3_canonicalization/canonicalization_vectors.csv
+!results/reviewer3_canonicalization/canonicalization_report.md
+!results/reviewer3_canonicalization/manifest.json
 cache/
 contracts/out/
 contracts/cache/

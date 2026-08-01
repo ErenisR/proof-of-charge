@@ -1,0 +1,32 @@
+{
+  "artifact_type": "cross-language canonical receipt conformance validation",
+  "artifacts": {
+    "canonicalization_report.md": {
+      "sha256": "ada5a5f3c7d4b4a3fca5136f1a374968ff0ed5d046bfce7b78664101d3076baa"
+    },
+    "canonicalization_summary.json": {
+      "sha256": "9b8c25ada9bce12e4b0747858698be16e536e9313cd2288c42efd5047c484b8e"
+    },
+    "canonicalization_vectors.csv": {
+      "sha256": "fb71de8ff3773fd3686178027466cd3f1a2bedc690652f147a810fa607dc3d9c"
+    }
+  },
+  "canonicalization_profile": "poc-c14n-v1",
+  "command": "scripts/generate_canonicalization_artifacts.py",
+  "dirty_worktree_at_generation": true,
+  "generated_at_utc": "2026-08-01T10:39:30.817431Z",
+  "hash_algorithm": "sha-256",
+  "inputs": {
+    "javascript_implementation": "scripts/receipt_canonicalization.mjs",
+    "javascript_implementation_sha256": "be38fdcbdc0b8e970c0b6efdc1dc9584780e98d11e06de1318471824655529b2",
+    "python_implementation": "src/receipt_canonicalization.py",
+    "python_implementation_sha256": "f584a355dca802942e5bf192bcee404607d7104cdf104c3b31604f30549c0e3b",
+    "vectors": "tests/fixtures/canonicalization_vectors.json",
+    "vectors_sha256": "3ed6bafc5229a39661cd3395a22fa3ddd5f2c3a0f54d99b78adf21e8fe4cefc7"
+  },
+  "node_version": "v23.10.0",
+  "operating_system": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "python_version": "3.13.3",
+  "source_commit_sha": "f870dd702ebcb9504f0592ddc9d8faa119675a40",
+  "validation_passed": true
+}
