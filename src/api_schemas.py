@@ -197,6 +197,10 @@ class AnchorResponse(BaseModel):
     day: str
     session_prefix: str
     batch_root: str
+    commitment_profile: str
+    context: dict[str, Any] | None
+    context_hash: str | None
+    tree_root: str | None
     receipt_count: int
     chain_tx: str | None
     cid: str | None
@@ -209,6 +213,10 @@ class AnchorResponse(BaseModel):
             day=row.day,
             session_prefix=row.session_prefix,
             batch_root=row.batch_root,
+            commitment_profile=row.commitment_profile,
+            context=row.context_json,
+            context_hash=row.context_hash,
+            tree_root=row.tree_root,
             receipt_count=row.receipt_count,
             chain_tx=row.chain_tx,
             cid=row.cid,
@@ -229,6 +237,7 @@ class ChainPublishResponse(BaseModel):
     chain_effective_gas_price_wei: int
     chain_transaction_fee_wei: int
     chain_status: int
+    commitment_profile: str | None = None
 
 
 class ChainVerifyResponse(BaseModel):
@@ -243,6 +252,7 @@ class ChainVerifyResponse(BaseModel):
     operator: str
     on_chain_timestamp: int
     match: bool
+    commitment_profile: str | None = None
 
 
 class VerificationResponse(BaseModel):

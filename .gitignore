@@ -215,6 +215,13 @@ results/*
 !results/reviewer3_canonicalization/canonicalization_vectors.csv
 !results/reviewer3_canonicalization/canonicalization_report.md
 !results/reviewer3_canonicalization/manifest.json
+!results/reviewer3_batch_merkle/
+!results/reviewer3_batch_merkle/batch_merkle_summary.json
+!results/reviewer3_batch_merkle/batch_merkle_cases.csv
+!results/reviewer3_batch_merkle/batch_merkle_report.md
+!results/reviewer3_batch_merkle/manifest.json
+!results/reviewer3_batch_merkle/membership_proofs/
+!results/reviewer3_batch_merkle/membership_proofs/*.json
 cache/
 contracts/out/
 contracts/cache/

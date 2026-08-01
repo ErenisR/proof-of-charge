@@ -138,6 +138,7 @@ def _publish_anchor_row(
         "day": anchor.day,
         "session_prefix": anchor.session_prefix,
         "batch_root": anchor.batch_root,
+        "commitment_profile": anchor.commitment_profile,
         "receipt_count": anchor.receipt_count,
         "chain_tx": tx_hash,
         "chain_block_number": receipt.block_number,

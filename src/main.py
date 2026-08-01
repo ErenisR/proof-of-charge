@@ -21,6 +21,8 @@ from .api_schemas import (
 )
 from .blockchain.publisher import publish_batch_anchor_by_id
 from .blockchain.verifier import verify_on_chain_anchor_by_id
+from .batch_service import generate_anchor_membership_proof
+from .batch_merkle import verify_membership_proof
 from .receipt_builder import build_receipt, hash_receipt
 from .receipt_schema import DEFAULT_SCHEMA_VERSION, DEFAULT_SESSION_TYPE
 from .receipt_canonicalization import HASH_ALGORITHM
@@ -155,6 +157,19 @@ def verify_anchor_chain(anchor_id: int) -> ChainVerifyResponse:
         raise HTTPException(status_code=503, detail="Database operation failed") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+@app.get("/v1/anchors/{anchor_id}/proofs/{session_id}")
+def get_anchor_membership_proof(anchor_id: int, session_id: str) -> dict[str, Any]:
+    try:
+        return generate_anchor_membership_proof(anchor_id, session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.post("/v1/anchors/proofs/verify")
+def verify_anchor_membership_proof(proof: dict[str, Any]) -> dict[str, bool]:
+    return {"valid": verify_membership_proof(proof)}
 
 
 @app.get("/v1/verifications", response_model=PaginatedResponse[VerificationResponse])

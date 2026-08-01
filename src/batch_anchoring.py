@@ -1,6 +1,7 @@
 # src/batch_anchoring.py
 import argparse
 import json
+from dataclasses import asdict
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
@@ -10,7 +11,20 @@ from sqlalchemy.orm import Session
 
 from . import db
 from .merkle import merkle_root
-from .models import Receipt
+from .models import BatchAnchor, Receipt
+from .batch_merkle import (
+    HASH_ALGORITHM as BATCH_HASH_ALGORITHM,
+    LEGACY_PROFILE,
+    ODD_NODE_RULE,
+    ORDERING_RULE,
+    PROFILE_V1,
+    BatchContext,
+    BatchLeafRecord,
+    ClosedBatchMembershipChanged,
+    build_batch_commitment,
+    hex32,
+    parse_timestamp,
+)
 from .repository import persist_batch_anchor
 from .storage import RECEIPTS_DIR, load_index, save_index
 
@@ -83,13 +97,15 @@ def build_batch_root(receipt_hashes: List[str]) -> str:
     return "0x" + root.hex()
 
 
-def anchor_day(day: str, session_prefix: str | None = None) -> Tuple[str, int]:
+def anchor_day(day: str, session_prefix: str | None = None, commitment_profile: str | None = None) -> Tuple[str, int]:
     if db.database_enabled():
         session = db.session_scope()
         try:
-            return anchor_day_from_db(day, session_prefix=session_prefix, db_session=session)
+            return anchor_day_from_db(day, session_prefix=session_prefix, db_session=session, commitment_profile=commitment_profile or PROFILE_V1)
         finally:
             session.close()
+    if commitment_profile and commitment_profile != LEGACY_PROFILE:
+        raise ValueError("poc-batch-merkle-v1 anchoring requires PostgreSQL-backed receipt snapshots")
     return anchor_day_from_files(day, session_prefix=session_prefix)
 
 
@@ -150,21 +166,41 @@ def anchor_day_from_db(
     day: str,
     session_prefix: str | None = None,
     db_session: Session | None = None,
+    commitment_profile: str = PROFILE_V1,
 ) -> Tuple[str, int]:
     owns_session = db_session is None
     session = db_session or db.session_scope()
 
     try:
-        receipt_hashes, session_ids = _collect_receipt_hashes_from_db(
-            session,
-            day=day,
-            session_prefix=session_prefix,
-        )
-        if not receipt_hashes:
-            raise ValueError(f"No receipts found for day {day}")
-
-        batch_root = build_batch_root(receipt_hashes)
-        memberships = _build_anchor_memberships(session_ids, receipt_hashes)
+        if commitment_profile == LEGACY_PROFILE:
+            receipt_hashes, session_ids = _collect_receipt_hashes_from_db(session, day=day, session_prefix=session_prefix)
+            if not receipt_hashes: raise ValueError(f"No receipts found for day {day}")
+            batch_root = build_batch_root(receipt_hashes)
+            memberships = _build_anchor_memberships(session_ids, receipt_hashes)
+            commitment = None
+        elif commitment_profile == PROFILE_V1:
+            context = BatchContext.for_day(day)
+            records = _collect_batch_records_from_db(session, day=day, session_prefix=session_prefix)
+            if not records: raise ValueError(f"No receipts found for day {day}")
+            commitment = build_batch_commitment(records, context)
+            batch_root = hex32(commitment.batch_root)
+            memberships = [
+                {"session_id": record.session_id, "receipt_hash": record.receipt_hash,
+                 "normalized_start_ts": record.start_ts, "leaf_hash": hex32(commitment.leaf_hashes[index]), "leaf_index": index}
+                for index, record in enumerate(commitment.records)
+            ]
+            receipt_hashes = [record.receipt_hash for record in commitment.records]
+            existing = list(session.scalars(select(BatchAnchor).where(BatchAnchor.day == day, BatchAnchor.session_prefix == (session_prefix or ""), BatchAnchor.commitment_profile == PROFILE_V1)))
+            if len(existing) > 1: raise ValueError(f"Ambiguous closed {PROFILE_V1} anchors for day={day} prefix={session_prefix}")
+            if existing:
+                anchor = existing[0]
+                if anchor.batch_root == batch_root and anchor.receipt_count == len(records):
+                    return anchor.batch_root, anchor.receipt_count
+                old_ids = {item.session_id: item.receipt_hash for item in anchor.receipts}
+                new_ids = {item.session_id: item.receipt_hash for item in commitment.records}
+                raise ClosedBatchMembershipChanged({"added_ids": sorted(set(new_ids)-set(old_ids)), "removed_ids": sorted(set(old_ids)-set(new_ids)), "changed_ids": sorted(k for k in set(old_ids)&set(new_ids) if old_ids[k] != new_ids[k])})
+        else:
+            raise ValueError(f"Unknown batch commitment profile: {commitment_profile}")
         persist_batch_anchor(
             day=day,
             session_prefix=session_prefix,
@@ -172,6 +208,15 @@ def anchor_day_from_db(
             receipt_count=len(receipt_hashes),
             receipt_memberships=memberships,
             db_session=session,
+            commitment_profile=commitment_profile,
+            context_json=asdict(commitment.context) if commitment else None,
+            context_hash=hex32(commitment.context_hash) if commitment else None,
+            tree_root=hex32(commitment.tree_root) if commitment else None,
+            window_start=parse_timestamp(commitment.context.window_start) if commitment else None,
+            window_end=parse_timestamp(commitment.context.window_end) if commitment else None,
+            ordering_rule=ORDERING_RULE if commitment else None,
+            odd_node_rule=ODD_NODE_RULE if commitment else None,
+            hash_algorithm=BATCH_HASH_ALGORITHM if commitment else None,
         )
         session.commit()
         return batch_root, len(receipt_hashes)
@@ -263,6 +308,13 @@ def _collect_receipt_hashes_from_db(
 
     pairs = list(session.execute(stmt))
     return [receipt_hash for _, receipt_hash in pairs], [session_id for session_id, _ in pairs]
+
+
+def _collect_batch_records_from_db(session: Session, day: str, session_prefix: str | None = None) -> List[BatchLeafRecord]:
+    day_start, day_end = _day_bounds(day)
+    stmt = select(Receipt.session_id, Receipt.start_ts, Receipt.receipt_hash).where(Receipt.start_ts >= day_start, Receipt.start_ts < day_end)
+    if session_prefix: stmt = stmt.where(Receipt.session_id.like(f"{session_prefix}-%"))
+    return [BatchLeafRecord(session_id, start_ts.replace(tzinfo=timezone.utc) if start_ts.tzinfo is None else start_ts, receipt_hash) for session_id, start_ts, receipt_hash in session.execute(stmt)]
 
 
 def _build_anchor_memberships(session_ids: List[str], receipt_hashes: List[str]) -> List[Dict[str, Any]]:

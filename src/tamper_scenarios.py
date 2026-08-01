@@ -24,7 +24,7 @@ from .blockchain.verifier import verify_on_chain_anchor_by_id
 from .meter_verifier import verify_meter_stream_from_db
 from .models import BatchAnchor, BatchAnchorReceipt, MeterValue, Receipt
 from .verifier import verify_session_from_db
-from .verifier_batch import verify_day_from_db
+from .verifier_batch import verify_anchor_from_db, verify_day_from_db
 
 LAYER_NAMES = (
     "receipt_hash",
@@ -287,7 +287,7 @@ def _assert_invariants(session: Session, ctx: MatrixContext) -> None:
     anchor = session.get(BatchAnchor, ctx.anchor_id)
     if len(memberships) != anchor.receipt_count:
         raise ValueError("Stored membership count does not equal anchor receipt_count")
-    if build_batch_root([m.receipt_hash for m in memberships]) != anchor.batch_root:
+    if not verify_anchor_from_db(anchor.id, session, persist_result=False)["match"]:
         raise ValueError("Recomputed baseline batch root differs from stored root")
 
 

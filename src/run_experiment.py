@@ -780,6 +780,7 @@ def run_experiment(
         "t_finalize_total_sec": round(synth["t_finalize_total"], 6),
         "t_finalize_avg_sec": round(synth["t_finalize_avg"], 6),
         "batch_root": batch_root,
+        "batch_commitment_profile": verify.get("commitment_profile"),
         "batch_root_match": verify["match"],
         "receipt_count_verified": verify["receipt_count"],
         **synth["validation"],

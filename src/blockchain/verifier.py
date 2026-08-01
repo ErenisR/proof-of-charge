@@ -111,6 +111,7 @@ def _verify_anchor_row(
         "day": anchor.day,
         "session_prefix": anchor.session_prefix,
         "expected_root": anchor.batch_root,
+        "commitment_profile": anchor.commitment_profile,
         "computed_root": on_chain.batch_root,
         "expected_receipt_count": anchor.receipt_count,
         "on_chain_receipt_count": on_chain.receipt_count,

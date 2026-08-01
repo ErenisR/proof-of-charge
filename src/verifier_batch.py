@@ -2,6 +2,7 @@
 import argparse
 import json
 import sys
+from datetime import timezone
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session
 from . import db
 from .batch_anchoring import ANCHORS_FILE, build_batch_root, _receipt_day
 from .models import BatchAnchor, BatchAnchorReceipt
+from .batch_merkle import LEGACY_PROFILE, PROFILE_V1, BatchContext, BatchLeafRecord, build_batch_commitment, hex32
+from .batch_service import audit_batch_membership
 from .repository import persist_batch_verification
 from .storage import load_index
 
@@ -116,11 +119,14 @@ def verify_day_from_db(
         )
         if not receipt_hashes:
             raise ValueError(f"No receipt memberships found for anchor {anchor.id}")
-        computed_root = build_batch_root(receipt_hashes)
-        expected_root = anchor.batch_root
-        root_match = computed_root == expected_root
-        count_match = len(receipt_hashes) == anchor.receipt_count
-        result = {
+        if anchor.commitment_profile == PROFILE_V1:
+            result = _verify_profiled_anchor(session, anchor)
+        else:
+            computed_root = build_batch_root(receipt_hashes)
+            expected_root = anchor.batch_root
+            root_match = computed_root == expected_root
+            count_match = len(receipt_hashes) == anchor.receipt_count
+            result = {
             "anchor_id": anchor.id,
             "day": day,
             "session_prefix": session_prefix,
@@ -134,7 +140,12 @@ def verify_day_from_db(
             "receipt_count": len(receipt_hashes),
             "session_ids": session_ids,
             "receipt_hashes": receipt_hashes,
-        }
+            "commitment_profile": anchor.commitment_profile or LEGACY_PROFILE,
+            "profile_match": True, "context_match": None, "count_match": count_match,
+            "ordering_match": None, "leaf_hashes_match": None, "tree_root_match": None,
+            "batch_root_match": root_match, "membership_snapshot_match": None,
+            "proofs_validated": 0,
+            }
         if persist_result:
             persist_batch_verification(result, db_session=session)
             if owns_session:
@@ -161,7 +172,61 @@ def _find_anchor_from_db(
         .where(BatchAnchor.session_prefix == normalized_prefix)
         .order_by(BatchAnchor.id.desc())
     )
-    return session.scalar(stmt)
+    anchors = list(session.scalars(stmt))
+    profiled = [anchor for anchor in anchors if anchor.commitment_profile == PROFILE_V1]
+    if len(profiled) > 1:
+        raise ValueError(f"Ambiguous {PROFILE_V1} anchors; verify by explicit anchor_id")
+    return profiled[0] if profiled else (anchors[0] if anchors else None)
+
+
+def verify_anchor_from_db(anchor_id: int, db_session: Session | None = None, persist_result: bool = True) -> Dict[str, Any]:
+    owns = db_session is None; session = db_session or db.session_scope()
+    try:
+        anchor = session.get(BatchAnchor, anchor_id)
+        if not anchor: raise ValueError(f"No anchor found for id {anchor_id}")
+        if anchor.commitment_profile == PROFILE_V1: result = _verify_profiled_anchor(session, anchor)
+        else:
+            hashes, ids = _collect_anchor_memberships_from_db(session, anchor.id); computed = build_batch_root(hashes)
+            result = {"anchor_id": anchor.id, "day": anchor.day, "session_prefix": anchor.session_prefix, "commitment_profile": anchor.commitment_profile, "expected_root": anchor.batch_root, "computed_root": computed, "root_match": computed == anchor.batch_root, "receipt_count_match": len(hashes) == anchor.receipt_count, "match": computed == anchor.batch_root and len(hashes) == anchor.receipt_count, "session_ids": ids, "receipt_hashes": hashes}
+        if persist_result: persist_batch_verification(result, db_session=session)
+        if owns and persist_result: session.commit()
+        return result
+    finally:
+        if owns: session.close()
+
+
+def _verify_profiled_anchor(session: Session, anchor: BatchAnchor) -> Dict[str, Any]:
+    rows = list(session.scalars(select(BatchAnchorReceipt).where(BatchAnchorReceipt.anchor_id == anchor.id).order_by(BatchAnchorReceipt.leaf_index)))
+    profile_match = anchor.commitment_profile == PROFILE_V1
+    try:
+        context = BatchContext.from_dict(anchor.context_json or {})
+        commitment = build_batch_commitment([BatchLeafRecord(row.session_id, row.normalized_start_ts.replace(tzinfo=timezone.utc) if row.normalized_start_ts.tzinfo is None else row.normalized_start_ts, row.receipt_hash) for row in rows], context)
+        context_match = hex32(commitment.context_hash) == anchor.context_hash
+        ordering_match = [row.leaf_index for row in rows] == list(range(len(rows))) and [row.session_id for row in rows] == [record.session_id for record in commitment.records]
+        leaf_hashes_match = all(row.leaf_hash == hex32(commitment.leaf_hashes[index]) for index, row in enumerate(rows))
+        tree_root_match = anchor.tree_root == hex32(commitment.tree_root)
+        batch_root_match = anchor.batch_root == hex32(commitment.batch_root)
+        error = None
+    except Exception as exc:
+        context_match = ordering_match = leaf_hashes_match = tree_root_match = batch_root_match = False
+        commitment = None; error = f"{type(exc).__name__}: {exc}"
+    count_match = len(rows) == anchor.receipt_count
+    immutable_match = all((profile_match, context_match, count_match, ordering_match, leaf_hashes_match, tree_root_match, batch_root_match))
+    audit = audit_batch_membership(anchor.id, session)
+    return {
+        "anchor_id": anchor.id, "day": anchor.day, "session_prefix": anchor.session_prefix,
+        "commitment_profile": anchor.commitment_profile, "expected_root": anchor.batch_root,
+        "computed_root": hex32(commitment.batch_root) if commitment else None,
+        "expected_receipt_count": anchor.receipt_count, "actual_membership_count": len(rows),
+        "receipt_count": len(rows), "receipt_count_match": count_match, "root_match": batch_root_match,
+        "profile_match": profile_match, "context_match": context_match, "count_match": count_match,
+        "ordering_match": ordering_match, "leaf_hashes_match": leaf_hashes_match,
+        "tree_root_match": tree_root_match, "batch_root_match": batch_root_match,
+        "membership_snapshot_match": audit["membership_snapshot_match"], "membership_audit": audit,
+        "proofs_validated": 0, "match": immutable_match,
+        "session_ids": [row.session_id for row in rows], "receipt_hashes": [row.receipt_hash for row in rows],
+        "error": error,
+    }
 
 
 def _collect_anchor_memberships_from_db(

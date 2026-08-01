@@ -242,6 +242,13 @@ For a tamper-evidence result, include `tamper_summary.md` and the key before
 and after fields from `tamper_summary.json`.
 # Controlled database tamper matrix
 
+New PostgreSQL batch anchors use the temporally ordered, domain-separated
+`poc-batch-merkle-v1` commitment defined in
+`docs/specifications/poc_batch_merkle_v1.md`. Historical anchors remain
+`legacy-hash-sort-v0`. Batch closure, proof reproduction, delayed insertions, and
+omission limitations are documented in
+`docs/reports/reviewer3_batch_merkle_semantics.md`.
+
 Newly constructed receipts use the explicit `poc-c14n-v1` serialization profile.
 Its frozen fields, decimal scales, UTC timestamp form, Unicode rules,
 cross-language vectors, and legacy verification behavior are specified in

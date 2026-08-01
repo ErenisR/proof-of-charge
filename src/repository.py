@@ -126,6 +126,15 @@ def persist_batch_anchor(
     chain_tx: str | None = None,
     cid: str | None = None,
     db_session: Session | None = None,
+    commitment_profile: str = "legacy-hash-sort-v0",
+    context_json: dict[str, Any] | None = None,
+    context_hash: str | None = None,
+    tree_root: str | None = None,
+    window_start: datetime | None = None,
+    window_end: datetime | None = None,
+    ordering_rule: str | None = None,
+    odd_node_rule: str | None = None,
+    hash_algorithm: str | None = None,
 ) -> BatchAnchor:
     owns_session = db_session is None
     session = db_session or db.session_scope()
@@ -153,6 +162,15 @@ def persist_batch_anchor(
             receipt_count=receipt_count,
             chain_tx=chain_tx,
             cid=cid,
+            commitment_profile=commitment_profile,
+            context_json=context_json,
+            context_hash=context_hash,
+            tree_root=tree_root,
+            window_start=window_start,
+            window_end=window_end,
+            ordering_rule=ordering_rule,
+            odd_node_rule=odd_node_rule,
+            hash_algorithm=hash_algorithm,
         )
         session.add(anchor)
         session.flush()
@@ -237,6 +255,8 @@ def _ensure_anchor_memberships(
                 session_id=membership["session_id"],
                 receipt_hash=membership["receipt_hash"],
                 leaf_index=int(membership["leaf_index"]),
+                normalized_start_ts=_parse_ts(membership["normalized_start_ts"]) if membership.get("normalized_start_ts") else None,
+                leaf_hash=membership.get("leaf_hash"),
             )
         )
 
